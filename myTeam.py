@@ -19,6 +19,8 @@ from game import Directions
 import game
 from util import nearestPoint
 from BehaviorTree import *
+from simulation import *
+import copy
 
 #################     python capture.py -r myTeam -b baselineTeam
 # Team creation #     python capture.py -r baselineTeam -b myTeam
@@ -54,13 +56,17 @@ class DummyAgent(CaptureAgent):
   You should look at baselineTeam.py for more details about how to
   create an agent as this is the bare minimum.
   """
-
+  myTeamColor = 'blue'
   myAction='Stop'
   securityDistance=4
   foodLimit=3
   mid=0
   aims = dict({})
   indexes=[]
+  partFilter1=None
+  partFilter2=None
+  myFoodBoolArray=None
+  myOldFoodBoolArray=None
 
   def __init__(self, index):
     CaptureAgent.__init__(self,index)
@@ -68,6 +74,7 @@ class DummyAgent(CaptureAgent):
     self.counter=0
     self.startPos=self.aim
     self.myPos=[1,3]
+    self.myOldPos=[1,3]
     self.successor= None
     self.gameState= None
     self.danger=False
@@ -101,6 +108,7 @@ class DummyAgent(CaptureAgent):
     self.gameState = gameState
     self.successor = self.getSuccessor(gameState, 'Stop')
     self.myPos = self.successor.getAgentPosition(self.index)
+    self.myOldPos = self.successor.getAgentPosition(self.index)
 
     foodLeft = self.getFood(gameState).asList()
     self.aim = random.choice(self.closestFoods(foodLeft,9))
@@ -111,9 +119,17 @@ class DummyAgent(CaptureAgent):
     if (self.startPos[0] < self.mid):
       self.mid -= 1
 
+    #sim = Simulation(gameState)
+    #sim.run()
+
+    if(self.index<=1):
+      DummyAgent.partFilter1 = ParticleFilter(gameState,self,self.index,(1,1))
+      DummyAgent.partFilter2 = ParticleFilter(gameState,self,self.index+2,(1,1))
+
 
 
   def chooseAction(self, gameState):
+    startTime=time.time()
     """
     self.debugDraw(self.aim, [1,0,0], True)
     """
@@ -122,7 +138,11 @@ class DummyAgent(CaptureAgent):
     self.successor = self.getSuccessor(gameState, 'Stop')
     self.myPos = self.successor.getAgentPosition(self.index)
     self.gameState=gameState
-
+    if DummyAgent.myTeamColor=='blue':
+      DummyAgent.myFoodBoolArray=gameState.getBlueFood()
+    else:
+      DummyAgent.myFoodBoolArray = gameState.getBlueFood()
+    """
     tree = Fallback([
       #if i died i need to find a new food target
       Sequence([self.iDied,self.findFoodTarget]).run,
@@ -133,30 +153,48 @@ class DummyAgent(CaptureAgent):
       # if not i grab food
       Sequence([self.iAte,self.findFoodTarget]).run
     ])
+    #tree.run()
+    """
 
-
-    tree.run()
-
-    '''
-    fallback([
-      #if i died i need to find a new food target
-      sequence([self.iDied,self.findFoodTarget]),
-      #if there is an enemy close i need to run away
-      sequence([self.enemyClose,self.runAway]),
-      # if i have too much food i go home
-      sequence([self.iAteTooMuch,self.goHome]),
-      # if not i grab food
-      sequence([self.iAte,self.findFoodTarget])
-    ]
-    )
-    '''
 
     print("index: "+str(self.index)+"  counter: "+str(self.counter)+"  aim"+str(self.aim))
 
-    self.aims[self.index] = self.aim
+
+
+
     bestAction = self.findBestAction()
     self.debugDraw(self.aim, [1, 0, 0], True)
+
+
+
+
+    print self.myFoodChanged(self.myFoodBoolArray,self.myOldFoodBoolArray) #self.countFood(gameState.getBlueFood())
+    #if not self.iDied():
+
+    DummyAgent.partFilter1.update(self.myPos,gameState.getAgentDistances()[0],self.index)
+    DummyAgent.partFilter2.update(self.myPos,gameState.getAgentDistances()[2],self.index)
+
+    foodLost=self.myFoodChanged(self.myFoodBoolArray,self.myOldFoodBoolArray)
+    if(foodLost!=None):
+      DummyAgent.partFilter1.knownPos(foodLost,[DummyAgent.partFilter2])
+      DummyAgent.partFilter2.knownPos(foodLost,[DummyAgent.partFilter1])
+    if(gameState.getAgentPosition(0)!=None):
+      DummyAgent.partFilter1.knownThisPos(gameState.getAgentPosition(0))
+    if(gameState.getAgentPosition(2)!=None):
+      DummyAgent.partFilter2.knownThisPos(gameState.getAgentPosition(2))
+    #DummyAgent.partFilter1.draw()
+    #DummyAgent.partFilter1.drawBest()
+    #DummyAgent.partFilter2.draw()
+
+    """
+    sim = Simulation(gameState)
+    sim.run()
+    """
+
+    DummyAgent.myOldFoodBoolArray=DummyAgent.myFoodBoolArray
+    print time.time()-startTime
     return bestAction
+    return 'Stop'
 
 
 
@@ -209,6 +247,25 @@ class DummyAgent(CaptureAgent):
     return [a for a in enemies if a.isPacman and a.getPosition() != None]
 
 
+  def countFood(self,foodBoolArray):
+    i=0
+    for a in foodBoolArray:
+      for b in a:
+        if b:
+          i+=1
+    return i
+
+  def myFoodChanged(self,foodBoolArray,oldFoodBoolArray):
+    if foodBoolArray==None or oldFoodBoolArray==None:
+      return None
+    length = 0
+    for a in foodBoolArray:
+        length += 1
+    for i in range(0,length):
+      for j in range(0,len(foodBoolArray[0])):
+        if foodBoolArray[i][j]!=oldFoodBoolArray[i][j]:
+          return (i,j)
+    return None
 
   '''
   Functions that return stuff for the behavior tree
@@ -329,3 +386,157 @@ class DummyAgent(CaptureAgent):
 
 
 
+
+class ParticleFilter:
+  NUMBER_PARTICLES=100
+  XLENGTH=0
+  YLENGTH=0
+  gameState=None
+  bestIndex=0
+
+
+  def __init__(self,gameState,agent,bestIndex,startPos=None):
+    self.gameState=gameState
+    self.agent=agent
+    self.bestIndex=bestIndex
+    self.bestEstimate=(1,1)
+    i=0
+    for a in gameState.getWalls():
+      i+=1
+    self.XLENGTH=i
+    self.YLENGTH=len(gameState.getWalls()[0])
+    self.NUMBER_PARTICLES=len(gameState.getWalls()[0])*i*1
+    self.particles=[]
+    if startPos is not None:
+      for i in range(0,self.NUMBER_PARTICLES):
+        self.particles.append((startPos[0],startPos[1]))
+    else:
+      for i in range(0,self.XLENGTH):
+        for j in range(0, self.YLENGTH):
+          if not gameState.hasWall(i,j):
+            self.particles.append((i,j))
+      originalParticles= copy.deepcopy(self.particles)
+      for i in range(len(self.particles),self.NUMBER_PARTICLES):
+        self.particles.append(random.choice(originalParticles))
+
+  def resetParticles(self,startPos=None):
+    self.particles=[]
+    if startPos is not None:
+      for i in range(0,self.NUMBER_PARTICLES):
+        self.particles.append((startPos[0],startPos[1]))
+    else:
+      for i in range(0,self.XLENGTH):
+        for j in range(0, self.YLENGTH):
+          if not self.gameState.hasWall(i,j):
+            self.particles.append((i,j))
+      originalParticles= copy.deepcopy(self.particles)
+      for i in range(len(self.particles),self.NUMBER_PARTICLES):
+        self.particles.append(random.choice(originalParticles))
+
+  def draw(self):
+    for i in range(0, self.XLENGTH):
+      for j in range(0, self.YLENGTH):
+        if (i,j) in self.particles:
+          self.agent.debugDraw((i,j), [0, 1, 1], False)
+
+  def drawBest(self):
+    self.agent.debugDraw(self.findBest(), [0, 1, 0], False)
+
+
+
+  def update(self, pos, dist,index):
+    if(index==self.bestIndex):
+      originalParticles= copy.deepcopy(self.particles)
+      visited=[]
+      self.particles=[]
+      for part in originalParticles:
+        moves=self.getPossibleMoves(part)
+        if not part in visited:
+          visited.append(part)
+          for move in moves:
+            if abs(abs(move[0] - pos[0]) + abs(move[1] - pos[1]) - max(dist, 0)) <= 6:
+              self.particles.append(move)
+        else:
+          if len(moves)>1:
+            if random.randint(0,100)<8:
+              move=moves[-1]
+            else:
+              move=moves[random.randint(0,len(move)-2)]
+              if random.randint(0, 100) < 70:
+                for choice in moves:
+                  distToBest = abs(choice[0] - self.bestEstimate[0]) + abs(choice[1] - self.bestEstimate[1])
+                  if distToBest>abs(part[0] - self.bestEstimate[0]) + abs(part[1] - self.bestEstimate[1]):
+                    move=choice
+          else:
+            move=random.choice(moves)
+          if abs(abs(move[0] - pos[0]) + abs(move[1] - pos[1]) - max(dist, 0)) <= 6:
+            self.particles.append(move)
+    else:
+      originalParticles = copy.deepcopy(self.particles)
+      self.particles = []
+      for part in originalParticles:
+        if abs(abs(part[0] - pos[0]) + abs(part[1] - pos[1]) - max(dist, 0)) <= 6:
+          self.particles.append(part)
+    originalParticles = copy.deepcopy(self.particles)
+
+    if len(originalParticles)==0:
+      self.resetParticles()
+    else:
+      for i in range(len(self.particles), self.NUMBER_PARTICLES):
+        self.particles.append(random.choice(originalParticles))
+
+    self.bestEstimate=self.findBest()
+
+
+  def knownPos(self,pos,otherFilters):
+    inOtherFilters=False
+    for filter in otherFilters:
+      if filter.hasPos(pos):
+        inOtherFilters=True
+    if pos in self.particles and not inOtherFilters:
+      self.particles=[]
+      for i in range(0,self.NUMBER_PARTICLES):
+        self.particles.append(pos)
+    else:
+      for i in range(0,int(self.NUMBER_PARTICLES/len(otherFilters))):
+        self.particles.append(pos)
+
+  def hasPos(self,pos):
+    return pos in self.particles
+
+
+  def knownThisPos(self,pos):
+    self.particles=[]
+    for i in range(0,self.NUMBER_PARTICLES):
+      self.particles.append(pos)
+
+
+  def findBest(self):
+    visited=[]
+    max=0
+    best=None
+    for part in self.particles:
+      if not part in visited:
+        visited.append(part)
+        count=self.particles.count(part)
+        if(count>max):
+          best=part
+          max=count
+    return best
+
+
+
+
+
+  def getPossibleMoves(self,part):
+    possibleMoves=[]
+    if not self.gameState.hasWall(part[0]+1,part[1]):
+      possibleMoves.append((part[0]+1,part[1]))
+    if not self.gameState.hasWall(part[0]-1,part[1]):
+      possibleMoves.append((part[0]-1,part[1]))
+    if not self.gameState.hasWall(part[0],part[1]+1):
+      possibleMoves.append((part[0],part[1]+1))
+    if not self.gameState.hasWall(part[0],part[1]-1):
+      possibleMoves.append((part[0],part[1]-1))
+    possibleMoves.append((part[0],part[1]))
+    return possibleMoves
