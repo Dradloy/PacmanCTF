@@ -5,29 +5,34 @@ from capture import SIGHT_RANGE
 class Simulation:
     timeLimit=20000
 
-    def __init__(self, gameState,blue,dicPos,agentIndex,direction,redOnCapsule,blueOnCapsule,redTimer,blueTimer,myMinX,myMaxX,myStartPos,enemyStartPos):
+    def __init__(self, gameState,XLENGTH,YLENGTH,blue,dicPos,agentIndex,direction,redOnCapsule,blueOnCapsule,redTimer,blueTimer,myMinX,myMaxX,myStartPos,enemyStartPos):
         self.gameState=gameState
         dicRoles={0:'att',2:'df'}
-        self.simState=SimulatedState(gameState,blue,dicRoles,dicPos,agentIndex,direction,redOnCapsule,blueOnCapsule,redTimer,blueTimer,myMinX,myMaxX,myStartPos,enemyStartPos)
+        self.simState=SimulatedState(gameState,XLENGTH,YLENGTH,blue,dicRoles,dicPos,agentIndex,direction,redOnCapsule,blueOnCapsule,redTimer,blueTimer,myMinX,myMaxX,myStartPos,enemyStartPos)
 
     def run(self):
         time=0
         while time<self.timeLimit:
             time+=1
             self.simState.step()
+        print "ran    eatdic"
+        print self.simState.dicFoodCarried
 
     def step(self):
         print self.gameState.getRedTeamIndices()
         print self.gameState.getBlueTeamIndices()
 
     def toString(self):
-        return str(self.simState.dicPos)
+        return str(self.simState.dicPos) + "   food eaten  me:"+str(self.simState.myEatingCounter)+";en;"+str(self.simState.enemyEatingCounter)+"    food carried"+str(self.simState.dicFoodCarried)
+
 
 
 class SimulatedState:
     POSSIBLE_MOVES=["North","South","West","East"]
 
-    def __init__(self, gameState, blue, dicRoles, dicPos, agentIndex, direction, redOnCapsule,blueOnCapsule,redTimer,blueTimer,myMinX,myMaxX,myStartPos,enemyStartPos):
+    def __init__(self, gameState,XLENGTH,YLENGTH, blue, dicRoles, dicPos, agentIndex, direction, redOnCapsule,blueOnCapsule,redTimer,blueTimer,myMinX,myMaxX,myStartPos,enemyStartPos):
+        self.XLENGTH=XLENGTH
+        self.YLENGTH=YLENGTH
         self.initialState=gameState
         self.dicRoles=dicRoles
         self.dicPos=dicPos
@@ -38,6 +43,10 @@ class SimulatedState:
         self.myMaxX=myMaxX
         self.myStartPos=myStartPos
         self.enemyStartPos=enemyStartPos
+        self.myEatingCounter=0
+        self.enemyEatingCounter=0
+        self.myDeathCounter=0
+        self.enemyDeathCounter=0
         if blue:
             self.walls=gameState.getWalls()
             self.enemyFood=gameState.getRedFood()
@@ -62,7 +71,11 @@ class SimulatedState:
             self.meOnCapsule=redOnCapsule
             self.enemyTimer=blueTimer
             self.myTimer=redTimer
-
+        self.dicFoodCarried = {0: 0}
+        for index in self.myIndexes:
+            self.dicFoodCarried[index]=0
+        for index in self.enemyIndexes:
+            self.dicFoodCarried[index]=0
 
     def stepOld(self):
         for index in range(0,max(max(self.myIndexes),max(self.enemyIndexes))+1):
@@ -119,6 +132,8 @@ class SimulatedState:
                 self.predictEnemyAgent(index)
             #updateFood
             self.updateFood(self.dicPos[index],index)
+            #update saved food
+            self.updateSavedFood(self.dicPos[index],index)
             # updatePills
             self.updatePills(self.dicPos[index],index)
             #updateEatenAgents
@@ -176,11 +191,24 @@ class SimulatedState:
 
     def updateFood(self,pos, index):
         if index in self.myIndexes and self.enemyFood[pos[0]][pos[1]]:
+            self.dicFoodCarried[index]+=1
             self.enemyFood[pos[0]][pos[1]]=False
             #print "We have eaten "+str(pos)
         elif index in self.enemyIndexes and self.myFood[pos[0]][pos[1]]:
+            self.dicFoodCarried[index]+=1
             self.myFood[pos[0]][pos[1]]=False
             #print "They have eaten "+str(pos)
+
+    def updateSavedFood(self,pos,index):
+        if index in self.myIndexes:
+            if pos[0] >= self.myMinX and pos[0] <= self.myMaxX:
+                self.myEatingCounter+=self.dicFoodCarried[index]
+                self.dicFoodCarried[index]=0
+        else:
+            if not (self.dicPos.get(index)[0] >= self.myMinX and self.dicPos.get(index)[0] <= self.myMaxX):
+                self.enemyEatingCounter+=self.dicFoodCarried[index]
+                self.dicFoodCarried[index]=0
+
 
     def updateEaten(self):
         for index in self.myIndexes:
@@ -215,7 +243,45 @@ class SimulatedState:
     def kill(self,index):
         if index in self.myIndexes:
             #print "I was killed  (capsule:"+str(self.enemyOnCapsule)+")"+"   pos: "+str(self.dicPos.get(index))
+            #self.dropFood(index)
             self.dicPos[index]=self.myStartPos
+            self.myDeathCounter+=1
         else:
             #print "They were killed  (capsule:"+str(self.meOnCapsule)+")"+"   pos: "+str(self.dicPos.get(index))
+            #self.dropFood(index)
             self.dicPos[index] = self.enemyStartPos
+            self.enemyDeathCounter+=1
+
+    def dropFood(self,index):
+        pos=self.dicPos.get(index)
+        i=self.dicFoodCarried.get(index)
+        squaresize=1
+
+        print "DROPING FOOD:"+str(i)
+
+        if index in self.myIndexes:
+            if i > 0:
+                print self.enemyFood
+                print "food dropped in "+str(pos)
+            while i>0:
+                for x in range(-squaresize,squaresize+1):
+                    if pos[0]+x>=0 and pos[0]+x<self.XLENGTH and pos[1]+squaresize<self.YLENGTH and not self.gameState.hasWall(pos[0]+x,pos[1]+squaresize) and not self.enemyFood[pos[0]+x][pos[1]+squaresize] and pos[0]+x>=self.myMinX and pos[0]+x<=self.myMaxX:
+                        self.enemyFood[pos[0]+x][pos[1]+squaresize]=True
+                        i-=1
+                    if pos[0]+x>=0 and pos[0]+x<self.XLENGTH and pos[1]-squaresize>=0 and not self.gameState.hasWall(pos[0]+x,pos[1]-squaresize) and not self.enemyFood[pos[0]+x][pos[1]-squaresize] and pos[0]+x>=self.myMinX and pos[0]+x<=self.myMaxX:
+                        self.enemyFood[pos[0]+x][pos[1]-squaresize]=True
+                        i-=1
+
+                for y in range(-squaresize, squaresize + 1):
+                    if pos[0]+squaresize<self.XLENGTH and pos[1]+y>=0 and pos[1]+y<self.YLENGTH and not self.gameState.hasWall(pos[0]+squaresize,pos[1]+y) and not self.enemyFood[pos[0]+squaresize][pos[1]+y] and pos[0]+x>=self.myMinX and pos[0]+x<=self.myMaxX:
+                        self.enemyFood[pos[0]+squaresize][pos[1]+y]=True
+                        i-=1
+                    if pos[0]-squaresize<self.XLENGTH and pos[1]+y>=0 and pos[1]+y<self.YLENGTH and not self.gameState.hasWall(pos[0]-squaresize,pos[1]+y) and not self.enemyFood[pos[0]-squaresize][pos[1]+y] and pos[0]+x>=self.myMinX and pos[0]+x<=self.myMaxX:
+                        self.enemyFood[pos[0]-squaresize][pos[1]+y]=True
+                        i-=1
+                    # if not food and not wall
+                squaresize+=1
+
+        if self.dicFoodCarried.get(index) > 0:
+            print self.enemyFood
+        self.dicFoodCarried[index]=0

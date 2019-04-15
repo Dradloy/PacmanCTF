@@ -27,7 +27,7 @@ import copy
 #################
 
 def createTeam(firstIndex, secondIndex, isRed,
-               first = 'DummyAgent', second = 'DummyAgent'):
+               first = 'AgentGroup2', second = 'AgentGroup2'):
   """
   This function should return a list of two agents that will form the
   team, initialized using firstIndex and secondIndex as their agent
@@ -50,7 +50,7 @@ def createTeam(firstIndex, secondIndex, isRed,
 # Agents #
 ##########
 
-class DummyAgent(CaptureAgent):
+class AgentGroup2(CaptureAgent):
   """
   A Dummy agent to serve as an example of the necessary agent structure.
   You should look at baselineTeam.py for more details about how to
@@ -67,6 +67,8 @@ class DummyAgent(CaptureAgent):
   partFilter2=None
   myFoodBoolArray=None
   myOldFoodBoolArray=None
+  XLENGTH = 0
+  YLENGTH = 0
 
   def __init__(self, index):
     CaptureAgent.__init__(self,index)
@@ -110,6 +112,12 @@ class DummyAgent(CaptureAgent):
     self.myPos = self.successor.getAgentPosition(self.index)
     self.myOldPos = self.successor.getAgentPosition(self.index)
 
+    i = 0
+    for a in gameState.getWalls():
+        i += 1
+    AgentGroup2.XLENGTH = i
+    AgentGroup2.YLENGTH = len(gameState.getWalls()[0])
+
     foodLeft = self.getFood(gameState).asList()
     self.aim = random.choice(self.closestFoods(foodLeft,9))
 
@@ -123,13 +131,13 @@ class DummyAgent(CaptureAgent):
     #sim.run()
 
     if(self.index<=1):
-      DummyAgent.partFilter1 = ParticleFilter(gameState,self,self.index,(1,1))
-      DummyAgent.partFilter2 = ParticleFilter(gameState,self,self.index+2,(1,1))
+      AgentGroup2.partFilter1 = ParticleFilter(gameState,self,self.index,(1,1))
+      AgentGroup2.partFilter2 = ParticleFilter(gameState,self,self.index+2,(1,1))
 
     dicPos={0:(1,1),1:self.startPos,2:(1,1),3:self.startPos}
     agentIndex=self.index
     direction="South"
-    sim = Simulation(gameState,True,dicPos,agentIndex,direction,False,False,0,0,self.mid,self.startPos[0],self.startPos,(1,1))
+    sim = Simulation(gameState,AgentGroup2.XLENGTH,AgentGroup2.YLENGTH,True,dicPos,agentIndex,direction,False,False,0,0,self.mid,self.startPos[0],self.startPos,(1,1))
     sim.run()
     print "index:"+str(self.index)+"  pos="+str(self.myPos)
     print sim.toString()
@@ -146,10 +154,10 @@ class DummyAgent(CaptureAgent):
     self.successor = self.getSuccessor(gameState, 'Stop')
     self.myPos = self.successor.getAgentPosition(self.index)
     self.gameState=gameState
-    if DummyAgent.myTeamColor=='blue':
-      DummyAgent.myFoodBoolArray=gameState.getBlueFood()
+    if AgentGroup2.myTeamColor=='blue':
+      AgentGroup2.myFoodBoolArray=gameState.getBlueFood()
     else:
-      DummyAgent.myFoodBoolArray = gameState.getBlueFood()
+      AgentGroup2.myFoodBoolArray = gameState.getBlueFood()
     """
     tree = Fallback([
       #if i died i need to find a new food target
@@ -179,17 +187,17 @@ class DummyAgent(CaptureAgent):
     print self.myFoodChanged(self.myFoodBoolArray,self.myOldFoodBoolArray) #self.countFood(gameState.getBlueFood())
     #if not self.iDied():
 
-    DummyAgent.partFilter1.update(self.myPos,gameState.getAgentDistances()[0],self.index)
-    DummyAgent.partFilter2.update(self.myPos,gameState.getAgentDistances()[2],self.index)
+    AgentGroup2.partFilter1.update(self.myPos,gameState.getAgentDistances()[0],self.index)
+    AgentGroup2.partFilter2.update(self.myPos,gameState.getAgentDistances()[2],self.index)
 
     foodLost=self.myFoodChanged(self.myFoodBoolArray,self.myOldFoodBoolArray)
     if(foodLost!=None):
-      DummyAgent.partFilter1.knownPos(foodLost,[DummyAgent.partFilter2])
-      DummyAgent.partFilter2.knownPos(foodLost,[DummyAgent.partFilter1])
+      AgentGroup2.partFilter1.knownPos(foodLost,[AgentGroup2.partFilter2])
+      AgentGroup2.partFilter2.knownPos(foodLost,[AgentGroup2.partFilter1])
     if(gameState.getAgentPosition(0)!=None):
-      DummyAgent.partFilter1.knownThisPos(gameState.getAgentPosition(0))
+      AgentGroup2.partFilter1.knownThisPos(gameState.getAgentPosition(0))
     if(gameState.getAgentPosition(2)!=None):
-      DummyAgent.partFilter2.knownThisPos(gameState.getAgentPosition(2))
+      AgentGroup2.partFilter2.knownThisPos(gameState.getAgentPosition(2))
     #DummyAgent.partFilter1.draw()
     #DummyAgent.partFilter1.drawBest()
     #DummyAgent.partFilter2.draw()
@@ -199,10 +207,10 @@ class DummyAgent(CaptureAgent):
     sim.run()
     """
 
-    DummyAgent.myOldFoodBoolArray=DummyAgent.myFoodBoolArray
+    AgentGroup2.myOldFoodBoolArray=AgentGroup2.myFoodBoolArray
     print time.time()-startTime
     #return bestAction
-    return 'urk'
+    #return 'urk'
     return 'Stop'
 
 
