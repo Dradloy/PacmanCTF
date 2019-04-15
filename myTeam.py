@@ -126,6 +126,14 @@ class DummyAgent(CaptureAgent):
       DummyAgent.partFilter1 = ParticleFilter(gameState,self,self.index,(1,1))
       DummyAgent.partFilter2 = ParticleFilter(gameState,self,self.index+2,(1,1))
 
+    dicPos={0:(1,1),1:self.startPos,2:(1,1),3:self.startPos}
+    agentIndex=self.index
+    direction="South"
+    sim = Simulation(gameState,True,dicPos,agentIndex,direction,False,False,0,0,self.mid,self.startPos[0],self.startPos,(1,1))
+    sim.run()
+    print "index:"+str(self.index)+"  pos="+str(self.myPos)
+    print sim.toString()
+
 
 
   def chooseAction(self, gameState):
@@ -163,7 +171,7 @@ class DummyAgent(CaptureAgent):
 
 
     bestAction = self.findBestAction()
-    self.debugDraw(self.aim, [1, 0, 0], True)
+    #self.debugDraw(self.aim, [1, 0, 0], True)
 
 
 
@@ -193,7 +201,8 @@ class DummyAgent(CaptureAgent):
 
     DummyAgent.myOldFoodBoolArray=DummyAgent.myFoodBoolArray
     print time.time()-startTime
-    return bestAction
+    #return bestAction
+    return 'urk'
     return 'Stop'
 
 
