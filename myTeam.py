@@ -56,7 +56,6 @@ class AgentGroup2(CaptureAgent):
   You should look at baselineTeam.py for more details about how to
   create an agent as this is the bare minimum.
   """
-  myTeamColor = 'blue'
   myAction='Stop'
   securityDistance=4
   foodLimit=3
@@ -69,6 +68,12 @@ class AgentGroup2(CaptureAgent):
   myOldFoodBoolArray=None
   XLENGTH = 0
   YLENGTH = 0
+  blue=True
+  dicPos={}
+  partFilters=dict({})
+  enemyIndexes=[]
+  myIndexes=[]
+  nbAgents=2
 
   def __init__(self, index):
     CaptureAgent.__init__(self,index)
@@ -81,7 +86,14 @@ class AgentGroup2(CaptureAgent):
     self.gameState= None
     self.danger=False
     self.aims[index]=self.aim
-    self.indexes.append(index)
+
+
+
+
+
+
+
+
 
   def registerInitialState(self, gameState):
     """
@@ -96,68 +108,98 @@ class AgentGroup2(CaptureAgent):
     IMPORTANT: This method may run for at most 15 seconds.
     """
 
-    '''
-    Make sure you do not delete the following line. If you would like to
-    use Manhattan distances instead of maze distances in order to save
-    on initialization time, please take a look at
-    CaptureAgent.registerInitialState in captureAgents.py.
-    '''
+    '''    Initialize maze distances    '''
     CaptureAgent.registerInitialState(self, gameState)
 
-    '''
-    Your initialization code goes here, if you need any.
-    '''
+    '''    Initialize variables needed to know my position    '''
     self.gameState = gameState
     self.successor = self.getSuccessor(gameState, 'Stop')
     self.myPos = self.successor.getAgentPosition(self.index)
     self.myOldPos = self.successor.getAgentPosition(self.index)
 
+    '''    Compute the map size (needed for simulation    '''
     i = 0
     for a in gameState.getWalls():
         i += 1
     AgentGroup2.XLENGTH = i
     AgentGroup2.YLENGTH = len(gameState.getWalls()[0])
 
-    foodLeft = self.getFood(gameState).asList()
-    self.aim = random.choice(self.closestFoods(foodLeft,9))
-
-    self.startPos=self.myPos
-
-    self.mid = self.distancer.dc.layout.width / 2
+    """    Compute the mid x (the one on our side)    """
+    AgentGroup2.mid = self.distancer.dc.layout.width / 2
     if (self.startPos[0] < self.mid):
-      self.mid -= 1
+      AgentGroup2.mid -= 1
 
-    #sim = Simulation(gameState)
-    #sim.run()
-
+    """    Determine if we are blue or red team    """
     if(self.index<=1):
-      AgentGroup2.partFilter1 = ParticleFilter(gameState,self,self.index,(1,1))
-      AgentGroup2.partFilter2 = ParticleFilter(gameState,self,self.index+2,(1,1))
+      self.blue = not gameState.isOnRedTeam(self.index)
 
+    """    Initialize indexes    """
+    if(self.index<=1):
+      if(AgentGroup2.blue):
+        AgentGroup2.myIndexes=gameState.getBlueTeamIndices()
+        AgentGroup2.enemyIndexes=gameState.getRedTeamIndices()
+      else:
+        AgentGroup2.myIndexes = gameState.getRedTeamIndices()
+        AgentGroup2.enemyIndexes = gameState.getBlueTeamIndices()
+
+    """    Count number of agents per team     """
+    AgentGroup2.nbAgents=len(AgentGroup2.myIndexes)
+
+    """    Initialize my starting position    """
+    self.startPos = self.myPos
+
+    """    Innitialise dictionary of position (needed for simulation    """
+    AgentGroup2.dicPos[self.index]=self.myPos
+    if(self.index<=1):
+      for index in AgentGroup2.enemyIndexes:
+        AgentGroup2.dicPos[index]=gameState.getInitialAgentPosition(index)
+
+
+    """    Initialize particle filters    """
+    if (self.index <= 1):
+      for index in AgentGroup2.enemyIndexes:
+        AgentGroup2.partFilters[index]=ParticleFilter(gameState, self, self.index, AgentGroup2.dicPos[index])
+      AgentGroup2.partFilter1 = ParticleFilter(gameState, self, self.index, (1, 1))
+      AgentGroup2.partFilter2 = ParticleFilter(gameState, self, self.index + 2, (1, 1))
+
+
+    #Example as how to run a simulation
     dicPos={0:(1,1),1:self.startPos,2:(1,1),3:self.startPos}
     agentIndex=self.index
     direction="South"
-    sim = Simulation(gameState,AgentGroup2.XLENGTH,AgentGroup2.YLENGTH,True,dicPos,agentIndex,direction,False,False,0,0,self.mid,self.startPos[0],self.startPos,(1,1))
+    sim = Simulation(gameState,AgentGroup2.XLENGTH,AgentGroup2.YLENGTH,self.blue,dicPos,agentIndex,direction,False,False,0,0,self.mid,self.startPos[0],self.startPos,(1,1))
     sim.run()
     print "index:"+str(self.index)+"  pos="+str(self.myPos)
     print sim.toString()
+
+    #Choose a semi rando goal
+    foodLeft = self.getFood(gameState).asList()
+    self.aim = random.choice(self.closestFoods(foodLeft,9))
+
+
+
+
+
+
+
 
 
 
   def chooseAction(self, gameState):
     startTime=time.time()
-    """
-    self.debugDraw(self.aim, [1,0,0], True)
-    """
 
-
+    """    Update variables related to position    """
     self.successor = self.getSuccessor(gameState, 'Stop')
     self.myPos = self.successor.getAgentPosition(self.index)
     self.gameState=gameState
-    if AgentGroup2.myTeamColor=='blue':
+
+    """    Update my foodArray to check if something was eaten    """
+    if AgentGroup2.blue:
       AgentGroup2.myFoodBoolArray=gameState.getBlueFood()
     else:
       AgentGroup2.myFoodBoolArray = gameState.getBlueFood()
+
+    #Example of a behavior tree
     """
     tree = Fallback([
       #if i died i need to find a new food target
@@ -170,45 +212,51 @@ class AgentGroup2(CaptureAgent):
       Sequence([self.iAte,self.findFoodTarget]).run
     ])
     #tree.run()
-    """
-
-
-    print("index: "+str(self.index)+"  counter: "+str(self.counter)+"  aim"+str(self.aim))
-
-
-
-
-    bestAction = self.findBestAction()
+    #bestAction = self.findBestAction()
     #self.debugDraw(self.aim, [1, 0, 0], True)
+    """
+    self.debugDraw(self.aim, [1, 0, 0], True)
+
+    print("index: "+str(self.index)+"  counter: "+str(self.counter)+"  aim"+str(self.aim))+ "   current pos:"+str(self.myPos)
 
 
 
 
-    print self.myFoodChanged(self.myFoodBoolArray,self.myOldFoodBoolArray) #self.countFood(gameState.getBlueFood())
-    #if not self.iDied():
+    for eindex in AgentGroup2.enemyIndexes:
+      AgentGroup2.partFilters[eindex].testForNone()
 
-    AgentGroup2.partFilter1.update(self.myPos,gameState.getAgentDistances()[0],self.index)
-    AgentGroup2.partFilter2.update(self.myPos,gameState.getAgentDistances()[2],self.index)
 
+    """    Particles filter updates    """
+    for eindex in AgentGroup2.enemyIndexes:
+      AgentGroup2.partFilters[eindex].update(self.myPos,gameState.getAgentDistances()[eindex],self.index)
+
+
+    print "done0"
+
+    """    Check if some food has been eaten and update the particles filter if so    """
     foodLost=self.myFoodChanged(self.myFoodBoolArray,self.myOldFoodBoolArray)
-    if(foodLost!=None):
-      AgentGroup2.partFilter1.knownPos(foodLost,[AgentGroup2.partFilter2])
-      AgentGroup2.partFilter2.knownPos(foodLost,[AgentGroup2.partFilter1])
-    if(gameState.getAgentPosition(0)!=None):
-      AgentGroup2.partFilter1.knownThisPos(gameState.getAgentPosition(0))
-    if(gameState.getAgentPosition(2)!=None):
-      AgentGroup2.partFilter2.knownThisPos(gameState.getAgentPosition(2))
-    #DummyAgent.partFilter1.draw()
-    #DummyAgent.partFilter1.drawBest()
-    #DummyAgent.partFilter2.draw()
+    if foodLost!=None:
+      for eindex in AgentGroup2.enemyIndexes:
+        AgentGroup2.partFilters[eindex].knownPos(foodLost,AgentGroup2.partFilters.values())
 
-    """
-    sim = Simulation(gameState)
-    sim.run()
-    """
 
+    """    Check if the enemies are in sight    """
+    for eindex in AgentGroup2.enemyIndexes:
+      if(gameState.getAgentPosition(eindex)!=None):
+        AgentGroup2.partFilters[eindex].knownThisPos(gameState.getAgentPosition(eindex))
+
+
+    """    Draw the particles    """
+    for eindex in AgentGroup2.enemyIndexes:
+      AgentGroup2.partFilters[eindex].draw()
+
+    """    Save our old food array (to check if something hes been eaten    """
     AgentGroup2.myOldFoodBoolArray=AgentGroup2.myFoodBoolArray
+
+
+    #Elapsed time during decision making
     print time.time()-startTime
+
     #return bestAction
     #return 'urk'
     return 'Stop'
@@ -427,6 +475,12 @@ class ParticleFilter:
     if startPos is not None:
       for i in range(0,self.NUMBER_PARTICLES):
         self.particles.append((startPos[0],startPos[1]))
+
+      for i in range(-2,3):
+        for j in range(-2,3):
+          if not gameState.hasWall(i, j):
+            self.particles.append((i, j))
+
     else:
       for i in range(0,self.XLENGTH):
         for j in range(0, self.YLENGTH):
@@ -492,6 +546,10 @@ class ParticleFilter:
       originalParticles = copy.deepcopy(self.particles)
       self.particles = []
       for part in originalParticles:
+        if (part == None):
+          print 'NONE!!!!!'
+        if (pos == None):
+          print 'pos is NONE!!!'
         if abs(abs(part[0] - pos[0]) + abs(part[1] - pos[1]) - max(dist, 0)) <= 6:
           self.particles.append(part)
     originalParticles = copy.deepcopy(self.particles)
@@ -508,7 +566,7 @@ class ParticleFilter:
   def knownPos(self,pos,otherFilters):
     inOtherFilters=False
     for filter in otherFilters:
-      if filter.hasPos(pos):
+      if filter!=self and filter.hasPos(pos):
         inOtherFilters=True
     if pos in self.particles and not inOtherFilters:
       self.particles=[]
@@ -543,7 +601,10 @@ class ParticleFilter:
 
 
 
-
+  def testForNone(self):
+    for part in self.particles:
+      if part==None:
+        print 'part is none'
 
   def getPossibleMoves(self,part):
     possibleMoves=[]

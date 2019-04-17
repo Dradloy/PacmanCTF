@@ -29,6 +29,13 @@ class Simulation:
 
 class SimulatedState:
     POSSIBLE_MOVES=["North","South","West","East"]
+    DEATH_SCORE=-10
+    KILL_SCORE=20
+    DISTANCE_TO_HOME_SCORE=1
+    FOOD_BROUGHT_BACK_SCORE=4
+    FOOD_PICKED_UP_SCORE=2
+    ENEMY_FOOD_BROUGHT_BACK_SCORE=-4
+    ENEMY_FOOD_PICKED_UP_SCORE=-2
 
     def __init__(self, gameState,XLENGTH,YLENGTH, blue, dicRoles, dicPos, agentIndex, direction, redOnCapsule,blueOnCapsule,redTimer,blueTimer,myMinX,myMaxX,myStartPos,enemyStartPos):
         self.XLENGTH=XLENGTH
@@ -256,32 +263,39 @@ class SimulatedState:
         pos=self.dicPos.get(index)
         i=self.dicFoodCarried.get(index)
         squaresize=1
-
-        print "DROPING FOOD:"+str(i)
-
         if index in self.myIndexes:
             if i > 0:
-                print self.enemyFood
-                print "food dropped in "+str(pos)
-            while i>0:
-                for x in range(-squaresize,squaresize+1):
-                    if pos[0]+x>=0 and pos[0]+x<self.XLENGTH and pos[1]+squaresize<self.YLENGTH and not self.gameState.hasWall(pos[0]+x,pos[1]+squaresize) and not self.enemyFood[pos[0]+x][pos[1]+squaresize] and pos[0]+x>=self.myMinX and pos[0]+x<=self.myMaxX:
-                        self.enemyFood[pos[0]+x][pos[1]+squaresize]=True
-                        i-=1
-                    if pos[0]+x>=0 and pos[0]+x<self.XLENGTH and pos[1]-squaresize>=0 and not self.gameState.hasWall(pos[0]+x,pos[1]-squaresize) and not self.enemyFood[pos[0]+x][pos[1]-squaresize] and pos[0]+x>=self.myMinX and pos[0]+x<=self.myMaxX:
-                        self.enemyFood[pos[0]+x][pos[1]-squaresize]=True
-                        i-=1
+                while i>0:
+                    for x in range(-squaresize,squaresize+1):
+                        if pos[0]+x>=0 and pos[0]+x<self.XLENGTH and pos[1]+squaresize<self.YLENGTH and not self.gameState.hasWall(pos[0]+x,pos[1]+squaresize) and not self.enemyFood[pos[0]+x][pos[1]+squaresize] and pos[0]+x>=self.myMinX and pos[0]+x<=self.myMaxX:
+                            self.enemyFood[pos[0]+x][pos[1]+squaresize]=True
+                            i-=1
+                        if pos[0]+x>=0 and pos[0]+x<self.XLENGTH and pos[1]-squaresize>=0 and not self.gameState.hasWall(pos[0]+x,pos[1]-squaresize) and not self.enemyFood[pos[0]+x][pos[1]-squaresize] and pos[0]+x>=self.myMinX and pos[0]+x<=self.myMaxX:
+                            self.enemyFood[pos[0]+x][pos[1]-squaresize]=True
+                            i-=1
 
-                for y in range(-squaresize, squaresize + 1):
-                    if pos[0]+squaresize<self.XLENGTH and pos[1]+y>=0 and pos[1]+y<self.YLENGTH and not self.gameState.hasWall(pos[0]+squaresize,pos[1]+y) and not self.enemyFood[pos[0]+squaresize][pos[1]+y] and pos[0]+x>=self.myMinX and pos[0]+x<=self.myMaxX:
-                        self.enemyFood[pos[0]+squaresize][pos[1]+y]=True
-                        i-=1
-                    if pos[0]-squaresize<self.XLENGTH and pos[1]+y>=0 and pos[1]+y<self.YLENGTH and not self.gameState.hasWall(pos[0]-squaresize,pos[1]+y) and not self.enemyFood[pos[0]-squaresize][pos[1]+y] and pos[0]+x>=self.myMinX and pos[0]+x<=self.myMaxX:
-                        self.enemyFood[pos[0]-squaresize][pos[1]+y]=True
-                        i-=1
-                    # if not food and not wall
-                squaresize+=1
+                    for y in range(-squaresize, squaresize + 1):
+                        if pos[0]+squaresize<self.XLENGTH and pos[1]+y>=0 and pos[1]+y<self.YLENGTH and not self.gameState.hasWall(pos[0]+squaresize,pos[1]+y) and not self.enemyFood[pos[0]+squaresize][pos[1]+y] and pos[0]+x>=self.myMinX and pos[0]+x<=self.myMaxX:
+                            self.enemyFood[pos[0]+squaresize][pos[1]+y]=True
+                            i-=1
+                        if pos[0]-squaresize<self.XLENGTH and pos[1]+y>=0 and pos[1]+y<self.YLENGTH and not self.gameState.hasWall(pos[0]-squaresize,pos[1]+y) and not self.enemyFood[pos[0]-squaresize][pos[1]+y] and pos[0]+x>=self.myMinX and pos[0]+x<=self.myMaxX:
+                            self.enemyFood[pos[0]-squaresize][pos[1]+y]=True
+                            i-=1
+                        # if not food and not wall
+                    squaresize+=1
 
-        if self.dicFoodCarried.get(index) > 0:
-            print self.enemyFood
         self.dicFoodCarried[index]=0
+
+    def getScore(self,type,originalDicFoodCarried):
+        if type=='attack':
+            return self.myDeathCounter*SimulatedState.DEATH_SCORE + self.dicFoodCarried.get(self.agentIndex)*SimulatedState.FOOD_PICKED_UP_SCORE + self.myEatingCounter*self.FOOD_BROUGHT_BACK_SCORE
+        elif type=='defense':
+            foodpicked=0
+            for index in self.enemyIndexes:
+                foodpicked+=self.dicFoodCarried.get(index)-originalDicFoodCarried.get(index)
+            return self.enemyDeathCounter*SimulatedState.KILL_SCORE+self.enemyEatingCounter*SimulatedState.ENEMY_FOOD_BROUGHT_BACK_SCORE+foodpicked*SimulatedState.ENEMY_FOOD_PICKED_UP_SCORE
+        elif type=='gohome' or type=='home' or type=='go home' or type=='goHome':
+            distToMid=min(abs(self.dicPos.get(self.agentIndex)[0]-self.myMaxX),abs(self.dicPos.get(self.agentIndex)[0]-self.myMaxX))
+            return (self.myMaxX-self.myMinX-distToMid)*SimulatedState.DISTANCE_TO_HOME_SCORE + self.myDeathCounter*SimulatedState.DEATH_SCORE + (self.dicFoodCarried.get(self.agentIndex)-originalDicFoodCarried.get(self.agentIndex))*SimulatedState.FOOD_PICKED_UP_SCORE + self.myEatingCounter*self.FOOD_BROUGHT_BACK_SCORE*2
+        else:
+            return 0
