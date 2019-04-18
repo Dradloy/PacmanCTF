@@ -70,10 +70,13 @@ class AgentGroup2(CaptureAgent):
   YLENGTH = 0
   blue=True
   dicPos={}
+  dicStartPos={}
   partFilters=dict({})
   enemyIndexes=[]
   myIndexes=[]
   nbAgents=2
+  myMinX=0
+  myMaxX=0
 
   def __init__(self, index):
     CaptureAgent.__init__(self,index)
@@ -149,11 +152,17 @@ class AgentGroup2(CaptureAgent):
     """    Initialize my starting position    """
     self.startPos = self.myPos
 
-    """    Innitialise dictionary of position (needed for simulation    """
+    """    Innitialise dictionary of positions (needed for simulation)    """
     AgentGroup2.dicPos[self.index]=self.myPos
     if(self.index<=1):
       for index in AgentGroup2.enemyIndexes:
         AgentGroup2.dicPos[index]=gameState.getInitialAgentPosition(index)
+
+    """    Innitialise dictionary of starting positions (needed for simulation)    """
+    AgentGroup2.dicStartPos[self.index] = self.myPos
+    if (self.index <= 1):
+        for index in AgentGroup2.enemyIndexes:
+            AgentGroup2.dicPos[index] = gameState.getInitialAgentPosition(index)
 
 
     """    Initialize particle filters    """
@@ -161,13 +170,20 @@ class AgentGroup2(CaptureAgent):
       for index in AgentGroup2.enemyIndexes:
         AgentGroup2.partFilters[index]=ParticleFilter(gameState, self, self.index, AgentGroup2.dicPos[index])
 
+    """    Initialize variables for the simulation    """
+    if AgentGroup2.blue:
+      AgentGroup2.myMinX=AgentGroup2.mid
+      AgentGroup2.myMaxX=AgentGroup2.XLENGTH
+    else:
+      AgentGroup2.myMinX=0
+      AgentGroup2.myMaxX=AgentGroup2.mid
 
     #Example as how to run a simulation
     agentIndex=self.index
     #direction diven by the node of the tree
     direction="South"
     dicPos={0:(1,1),1:self.startPos,2:(1,1),3:self.startPos}
-    sim = Simulation(gameState,AgentGroup2.XLENGTH,AgentGroup2.YLENGTH,self.blue,dicPos,agentIndex,direction,False,False,0,0,self.mid,self.startPos[0],self.startPos,(1,1))
+    sim = Simulation(gameState,AgentGroup2.XLENGTH,AgentGroup2.YLENGTH,self.blue,dicPos,agentIndex,direction,False,False,0,0,AgentGroup2.myMinX,AgentGroup2.myMaxX,AgentGroup2.dicStartPos)
     #run the simulation
     sim.run()
     # Need to keep an update of the food carried
@@ -217,7 +233,6 @@ class AgentGroup2(CaptureAgent):
       #bestAction = self.findBestAction()
       #self.debugDraw(self.aim, [1, 0, 0], True)
       """
-      self.debugDraw(self.aim, [1, 0, 0], True)
 
       print("index: "+str(self.index)+"  counter: "+str(self.counter)+"  aim"+str(self.aim))+ "   current pos:"+str(self.myPos)
 

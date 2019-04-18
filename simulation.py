@@ -5,10 +5,10 @@ from capture import SIGHT_RANGE
 class Simulation:
     timeLimit=200
 
-    def __init__(self, gameState,XLENGTH,YLENGTH,blue,dicPos,agentIndex,direction,redOnCapsule,blueOnCapsule,redTimer,blueTimer,myMinX,myMaxX,myStartPos,enemyStartPos):
+    def __init__(self, gameState,XLENGTH,YLENGTH,blue,dicPos,agentIndex,direction,redOnCapsule,blueOnCapsule,redTimer,blueTimer,myMinX,myMaxX,dicStartPos):
         self.gameState=gameState
         dicRoles={0:'att',2:'df'}
-        self.simState=SimulatedState(gameState,XLENGTH,YLENGTH,blue,dicRoles,dicPos,agentIndex,direction,redOnCapsule,blueOnCapsule,redTimer,blueTimer,myMinX,myMaxX,myStartPos,enemyStartPos)
+        self.simState=SimulatedState(gameState,XLENGTH,YLENGTH,blue,dicRoles,dicPos,agentIndex,direction,redOnCapsule,blueOnCapsule,redTimer,blueTimer,myMinX,myMaxX,dicStartPos)
 
     def run(self):
         time=0
@@ -39,19 +39,18 @@ class SimulatedState:
     ENEMY_FOOD_BROUGHT_BACK_SCORE=-4
     ENEMY_FOOD_PICKED_UP_SCORE=-2
 
-    def __init__(self, gameState,XLENGTH,YLENGTH, blue, dicRoles, dicPos, agentIndex, direction, redOnCapsule,blueOnCapsule,redTimer,blueTimer,myMinX,myMaxX,myStartPos,enemyStartPos):
+    def __init__(self, gameState,XLENGTH,YLENGTH, blue, dicRoles, dicPos, agentIndex, direction, redOnCapsule,blueOnCapsule,redTimer,blueTimer,myMinX,myMaxX,dicStartPos):
         self.XLENGTH=XLENGTH
         self.YLENGTH=YLENGTH
         self.initialState=gameState
         self.dicRoles=dicRoles
         self.dicPos=dicPos
+        self.dicStartPos=dicStartPos
         self.agentIndex=agentIndex
         self.direction=direction
         self.gameState=gameState
         self.myMinX=myMinX
         self.myMaxX=myMaxX
-        self.myStartPos=myStartPos
-        self.enemyStartPos=enemyStartPos
         self.myEatingCounter=0
         self.enemyEatingCounter=0
         self.myDeathCounter=0
@@ -253,12 +252,12 @@ class SimulatedState:
         if index in self.myIndexes:
             #print "I was killed  (capsule:"+str(self.enemyOnCapsule)+")"+"   pos: "+str(self.dicPos.get(index))
             #self.dropFood(index)
-            self.dicPos[index]=self.myStartPos
+            self.dicPos[index]=self.dicStartPos[index]
             self.myDeathCounter+=1
         else:
             #print "They were killed  (capsule:"+str(self.meOnCapsule)+")"+"   pos: "+str(self.dicPos.get(index))
             #self.dropFood(index)
-            self.dicPos[index] = self.enemyStartPos
+            self.dicPos[index] = self.dicStartPos[index]
             self.enemyDeathCounter+=1
 
     def dropFood(self,index):
@@ -290,7 +289,7 @@ class SimulatedState:
 
     def getScore(self,type,originalDicFoodCarried):
         if type=='attack':
-            #add distance to closest food
+            #add maze distance to closest food
             return self.myDeathCounter*SimulatedState.DEATH_SCORE + self.dicFoodCarried.get(self.agentIndex)*SimulatedState.FOOD_PICKED_UP_SCORE + self.myEatingCounter*self.FOOD_BROUGHT_BACK_SCORE
         elif type=='defense':
             foodpicked=0
