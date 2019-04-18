@@ -118,6 +118,7 @@ class AgentGroup2(CaptureAgent):
     self.successor = self.getSuccessor(gameState, 'Stop')
     self.myPos = self.successor.getAgentPosition(self.index)
     self.myOldPos = self.successor.getAgentPosition(self.index)
+    AgentGroup2.dicPos[self.index] = self.myPos
 
     '''    Compute the map size (needed for simulation    '''
     i = 0
@@ -161,16 +162,23 @@ class AgentGroup2(CaptureAgent):
     if (self.index <= 1):
       for index in AgentGroup2.enemyIndexes:
         AgentGroup2.partFilters[index]=ParticleFilter(gameState, self, self.index, AgentGroup2.dicPos[index])
-      AgentGroup2.partFilter1 = ParticleFilter(gameState, self, self.index, (1, 1))
-      AgentGroup2.partFilter2 = ParticleFilter(gameState, self, self.index + 2, (1, 1))
 
 
     #Example as how to run a simulation
-    dicPos={0:(1,1),1:self.startPos,2:(1,1),3:self.startPos}
     agentIndex=self.index
+    #direction diven by the node of the tree
     direction="South"
+    dicPos={0:(1,1),1:self.startPos,2:(1,1),3:self.startPos}
     sim = Simulation(gameState,AgentGroup2.XLENGTH,AgentGroup2.YLENGTH,self.blue,dicPos,agentIndex,direction,False,False,0,0,self.mid,self.startPos[0],self.startPos,(1,1))
+    #run the simulation
     sim.run()
+    # Need to keep an update of the food carried
+    dicFoodCarried={}
+    for index in AgentGroup2.myIndexes:
+      dicFoodCarried[index]=0
+    for index in AgentGroup2.enemyIndexes:
+      dicFoodCarried[index]=0
+    print 'score: '+str(sim.getScore('attack',dicFoodCarried))
     print "index:"+str(self.index)+"  pos="+str(self.myPos)
     print sim.toString()
 

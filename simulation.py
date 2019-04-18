@@ -3,7 +3,7 @@ import copy
 from capture import SIGHT_RANGE
 
 class Simulation:
-    timeLimit=20000
+    timeLimit=200
 
     def __init__(self, gameState,XLENGTH,YLENGTH,blue,dicPos,agentIndex,direction,redOnCapsule,blueOnCapsule,redTimer,blueTimer,myMinX,myMaxX,myStartPos,enemyStartPos):
         self.gameState=gameState
@@ -25,6 +25,8 @@ class Simulation:
     def toString(self):
         return str(self.simState.dicPos) + "   food eaten  me:"+str(self.simState.myEatingCounter)+";en;"+str(self.simState.enemyEatingCounter)+"    food carried"+str(self.simState.dicFoodCarried)
 
+    def getScore(self,type,originalDicFoodCarried):
+        return self.simState.getScore(type,originalDicFoodCarried)
 
 
 class SimulatedState:
@@ -288,6 +290,7 @@ class SimulatedState:
 
     def getScore(self,type,originalDicFoodCarried):
         if type=='attack':
+            #add distance to closest food
             return self.myDeathCounter*SimulatedState.DEATH_SCORE + self.dicFoodCarried.get(self.agentIndex)*SimulatedState.FOOD_PICKED_UP_SCORE + self.myEatingCounter*self.FOOD_BROUGHT_BACK_SCORE
         elif type=='defense':
             foodpicked=0
