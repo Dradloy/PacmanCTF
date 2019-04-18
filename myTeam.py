@@ -64,8 +64,6 @@ class AgentGroup2(CaptureAgent):
   mid=0
   aims = dict({})
   indexes=[]
-  partFilter1=None
-  partFilter2=None
   myFoodBoolArray=None
   myOldFoodBoolArray=None
   XLENGTH = 0
@@ -187,6 +185,104 @@ class AgentGroup2(CaptureAgent):
     self.aim = random.choice(self.closestFoods(foodLeft,9))
 
 
+
+  def chooseAction(self, gameState):
+      startTime=time.time()
+
+      """    Update variables related to position    """
+      self.successor = self.getSuccessor(gameState, 'Stop')
+      self.myPos = self.successor.getAgentPosition(self.index)
+      self.gameState=gameState
+      AgentGroup2.dicPos[self.index]=self.myPos
+
+      """    Update my foodArray to check if something was eaten    """
+      if AgentGroup2.blue:
+        AgentGroup2.myFoodBoolArray=gameState.getBlueFood()
+      else:
+        AgentGroup2.myFoodBoolArray = gameState.getBlueFood()
+
+      #Example of a behavior tree
+      """
+      tree = Fallback([
+        #if i died i need to find a new food target
+        Sequence([self.iDied,self.findFoodTarget]).run,
+        #if there is an enemy close i need to run away
+        Sequence([self.enemyClose,self.runAway]).run,
+        # if i have too much food i go home
+        Sequence([self.iAteTooMuch,self.goHome]).run,
+        # if not i grab food
+        Sequence([self.iAte,self.findFoodTarget]).run
+      ])
+      #tree.run()
+      #bestAction = self.findBestAction()
+      #self.debugDraw(self.aim, [1, 0, 0], True)
+      """
+      self.debugDraw(self.aim, [1, 0, 0], True)
+
+      print("index: "+str(self.index)+"  counter: "+str(self.counter)+"  aim"+str(self.aim))+ "   current pos:"+str(self.myPos)
+
+
+
+
+      for eindex in AgentGroup2.enemyIndexes:
+        AgentGroup2.partFilters[eindex].testForNone()
+
+
+      """    Particles filter updates    """
+      for eindex in AgentGroup2.enemyIndexes:
+        AgentGroup2.partFilters[eindex].update(self.myPos,gameState.getAgentDistances()[eindex],self.index)
+
+
+      print "done0"
+
+      """    Check if some food has been eaten and update the particles filter if so    """
+      foodLost=self.myFoodChanged(self.myFoodBoolArray,self.myOldFoodBoolArray)
+      if foodLost!=None:
+        for eindex in AgentGroup2.enemyIndexes:
+          AgentGroup2.partFilters[eindex].knownPos(foodLost,AgentGroup2.partFilters.values())
+
+
+      """    Check if the enemies are in sight    """
+      for eindex in AgentGroup2.enemyIndexes:
+        if(gameState.getAgentPosition(eindex)!=None):
+          AgentGroup2.partFilters[eindex].knownThisPos(gameState.getAgentPosition(eindex))
+
+
+      """    Draw the particles    """
+      if False:
+          for eindex in AgentGroup2.enemyIndexes:
+            AgentGroup2.partFilters[eindex].draw()
+
+      """    Save our old food array (to check if something hes been eaten    """
+      AgentGroup2.myOldFoodBoolArray=AgentGroup2.myFoodBoolArray
+
+
+
+
+      """      Update dicPos      """
+      for eindex in AgentGroup2.enemyIndexes:
+          AgentGroup2.dicPos[eindex]=AgentGroup2.partFilters.get(eindex).findBest()
+
+      """      Draw dicPos      """
+      if False:
+          self.debugDraw(self.myPos, [1, 0, 0], True)
+          for eindex in AgentGroup2.enemyIndexes:
+              self.debugDraw(AgentGroup2.dicPos[eindex], [1, 0, 0], False)
+          for index in AgentGroup2.myIndexes:
+              self.debugDraw(AgentGroup2.dicPos[index], [1, 0, 0], False)
+
+
+
+
+
+
+
+
+      #Elapsed time during decision making
+      chosenAction = self.findBestActionWithTree(startTime)
+      print time.time()-startTime
+
+      return chosenAction
 
 
 
@@ -536,84 +632,6 @@ class AgentGroup2(CaptureAgent):
     self.myAction = bestAction
     return bestAction 
 
-
-  def chooseAction(self, gameState):
-      startTime=time.time()
-
-      """    Update variables related to position    """
-      self.successor = self.getSuccessor(gameState, 'Stop')
-      self.myPos = self.successor.getAgentPosition(self.index)
-      self.gameState=gameState
-
-      """    Update my foodArray to check if something was eaten    """
-      if AgentGroup2.blue:
-        AgentGroup2.myFoodBoolArray=gameState.getBlueFood()
-      else:
-        AgentGroup2.myFoodBoolArray = gameState.getBlueFood()
-
-      #Example of a behavior tree
-      """
-      tree = Fallback([
-        #if i died i need to find a new food target
-        Sequence([self.iDied,self.findFoodTarget]).run,
-        #if there is an enemy close i need to run away
-        Sequence([self.enemyClose,self.runAway]).run,
-        # if i have too much food i go home
-        Sequence([self.iAteTooMuch,self.goHome]).run,
-        # if not i grab food
-        Sequence([self.iAte,self.findFoodTarget]).run
-      ])
-      #tree.run()
-      #bestAction = self.findBestAction()
-      #self.debugDraw(self.aim, [1, 0, 0], True)
-      """
-      self.debugDraw(self.aim, [1, 0, 0], True)
-
-      print("index: "+str(self.index)+"  counter: "+str(self.counter)+"  aim"+str(self.aim))+ "   current pos:"+str(self.myPos)
-
-
-
-
-      for eindex in AgentGroup2.enemyIndexes:
-        AgentGroup2.partFilters[eindex].testForNone()
-
-
-      """    Particles filter updates    """
-      for eindex in AgentGroup2.enemyIndexes:
-        AgentGroup2.partFilters[eindex].update(self.myPos,gameState.getAgentDistances()[eindex],self.index)
-
-
-      print "done0"
-
-      """    Check if some food has been eaten and update the particles filter if so    """
-      foodLost=self.myFoodChanged(self.myFoodBoolArray,self.myOldFoodBoolArray)
-      if foodLost!=None:
-        for eindex in AgentGroup2.enemyIndexes:
-          AgentGroup2.partFilters[eindex].knownPos(foodLost,AgentGroup2.partFilters.values())
-
-
-      """    Check if the enemies are in sight    """
-      for eindex in AgentGroup2.enemyIndexes:
-        if(gameState.getAgentPosition(eindex)!=None):
-          AgentGroup2.partFilters[eindex].knownThisPos(gameState.getAgentPosition(eindex))
-
-
-      """    Draw the particles    """
-      for eindex in AgentGroup2.enemyIndexes:
-        AgentGroup2.partFilters[eindex].draw()
-
-      """    Save our old food array (to check if something hes been eaten    """
-      AgentGroup2.myOldFoodBoolArray=AgentGroup2.myFoodBoolArray
-
-
-      #Elapsed time during decision making
-
-      #return bestAction
-      #return 'urk'
-      chosenAction = self.findBestActionWithTree(startTime)
-      print time.time()-startTime
-
-      return chosenAction
 
 class ParticleFilter:
   NUMBER_PARTICLES=100
