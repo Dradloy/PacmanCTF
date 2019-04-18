@@ -21,6 +21,8 @@ from util import nearestPoint
 from BehaviorTree import *
 from simulation import *
 import copy
+import numpy as np
+from mcst import mcTree
 
 #################     python capture.py -r myTeam -b baselineTeam
 # Team creation #     python capture.py -r baselineTeam -b myTeam
@@ -177,89 +179,6 @@ class AgentGroup2(CaptureAgent):
     self.aim = random.choice(self.closestFoods(foodLeft,9))
 
 
-
-
-
-
-
-
-
-
-  def chooseAction(self, gameState):
-    startTime=time.time()
-
-    """    Update variables related to position    """
-    self.successor = self.getSuccessor(gameState, 'Stop')
-    self.myPos = self.successor.getAgentPosition(self.index)
-    self.gameState=gameState
-
-    """    Update my foodArray to check if something was eaten    """
-    if AgentGroup2.blue:
-      AgentGroup2.myFoodBoolArray=gameState.getBlueFood()
-    else:
-      AgentGroup2.myFoodBoolArray = gameState.getBlueFood()
-
-    #Example of a behavior tree
-    """
-    tree = Fallback([
-      #if i died i need to find a new food target
-      Sequence([self.iDied,self.findFoodTarget]).run,
-      #if there is an enemy close i need to run away
-      Sequence([self.enemyClose,self.runAway]).run,
-      # if i have too much food i go home
-      Sequence([self.iAteTooMuch,self.goHome]).run,
-      # if not i grab food
-      Sequence([self.iAte,self.findFoodTarget]).run
-    ])
-    #tree.run()
-    #bestAction = self.findBestAction()
-    #self.debugDraw(self.aim, [1, 0, 0], True)
-    """
-    self.debugDraw(self.aim, [1, 0, 0], True)
-
-    print("index: "+str(self.index)+"  counter: "+str(self.counter)+"  aim"+str(self.aim))+ "   current pos:"+str(self.myPos)
-
-
-
-
-    for eindex in AgentGroup2.enemyIndexes:
-      AgentGroup2.partFilters[eindex].testForNone()
-
-
-    """    Particles filter updates    """
-    for eindex in AgentGroup2.enemyIndexes:
-      AgentGroup2.partFilters[eindex].update(self.myPos,gameState.getAgentDistances()[eindex],self.index)
-
-
-    print "done0"
-
-    """    Check if some food has been eaten and update the particles filter if so    """
-    foodLost=self.myFoodChanged(self.myFoodBoolArray,self.myOldFoodBoolArray)
-    if foodLost!=None:
-      for eindex in AgentGroup2.enemyIndexes:
-        AgentGroup2.partFilters[eindex].knownPos(foodLost,AgentGroup2.partFilters.values())
-
-
-    """    Check if the enemies are in sight    """
-    for eindex in AgentGroup2.enemyIndexes:
-      if(gameState.getAgentPosition(eindex)!=None):
-        AgentGroup2.partFilters[eindex].knownThisPos(gameState.getAgentPosition(eindex))
-
-
-    """    Draw the particles    """
-    for eindex in AgentGroup2.enemyIndexes:
-      AgentGroup2.partFilters[eindex].draw()
-
-    """    Save our old food array (to check if something hes been eaten    """
-    AgentGroup2.myOldFoodBoolArray=AgentGroup2.myFoodBoolArray
-
-
-    #Elapsed time during decision making
-    print time.time()-startTime
-
-    #return bestAction
-    #return 'urk'
-    return 'Stop'
 
 
 
@@ -450,7 +369,243 @@ class AgentGroup2(CaptureAgent):
     return 'running'
 
 
+  def selectNode(self,root):
+      maxTreeDepth = 5
+      treeDepth = 1
+      currNode = root
 
+      C = np.sqrt(2)
+
+      while treeDepth < maxTreeDepth:
+        treeDepth += 1
+        if not currNode.children:
+          return currNode
+
+        maxScore = -9999
+        maxNode = None
+        for child in currNode.children:
+          if child.score == None:
+            return child
+          else:
+            ucb1Score = child.score + C*np.sqrt(np.log(currNode.numVisits)/child.numVisits)
+            if ucb1Score > maxScore:
+              maxNode = child
+              maxScore = ucb1Score
+        
+        currNode = maxNode
+
+      return currNode
+
+  def expandNode(self,node):
+    availableMoves = node.id.getLegalActions(self.index)
+    for move in availableMoves:
+      nextGameState = self.getSuccessor(node.id,move)
+      if nextGameState in self.stateDict:
+        continue
+      newChild = mcTree(nextGameState,node)
+      node.children.append(newChild)
+      self.stateDict[nextGameState] = newChild
+    
+    if not node.children:
+      return node
+    return random.choice(node.children)
+
+  def reverseDirection(self,action):
+      if action == Directions.NORTH:
+          return Directions.SOUTH
+      if action == Directions.SOUTH:
+          return Directions.NORTH
+      if action == Directions.EAST:
+          return Directions.WEST
+      if action == Directions.WEST:
+          return Directions.EAST
+      return action
+
+
+  def simulateGame(self,simStart):
+    turnCounter = 0
+    turnLimit = 50
+    currState = simStart.id
+    prevAction = Directions.STOP
+    while(turnCounter < turnLimit):
+      actions = currState.getLegalActions(self.index)
+      actions.remove('Stop')
+      # print self.reverseDirection(prevAction)
+      if prevAction!=Directions.STOP and len(actions) > 1:
+        try:
+          actions.remove(self.reverseDirection(prevAction))
+        except ValueError:
+          pass
+
+      nextAction = random.choice(actions)
+      turnCounter += 1
+      currState = self.getSuccessor(currState, nextAction)
+      prevAction = nextAction
+      # print currState
+      # raw_input()
+      if currState.data._lose == True:
+        return -999
+      elif currState.data._win == True:
+        return 999
+
+    # print currState
+    # raw_input()
+    return self.simScore(simStart.id,currState,0) 
+
+  def simScore(self,startState,currState,behaviorMode):
+    
+    newScore = currState.getScore()
+    oldScore = startState.getScore()
+    if newScore != oldScore:
+      return (newScore - oldScore)*50
+     
+    newSoftScore = currState.data.agentStates[self.index].numCarrying*10
+    oldSoftScore = startState.data.agentStates[self.index].numCarrying*10
+
+    newSoftScore -= (20-currState.getRedFood().count())*10
+    oldSoftScore -= (20-startState.getRedFood().count())*10
+    if newSoftScore != oldSoftScore:
+      return newSoftScore - oldSoftScore
+
+    initPos = startState.getAgentPosition(self.index)
+    currPos = currState.getAgentPosition(self.index)
+
+    aggression = 0
+    if not startState.data.agentStates[self.index].isPacman:
+      aggression = np.abs(self.mid-self.myPos[0])*5
+
+    return self.getMazeDistance(initPos, currPos) + aggression
+
+
+
+  def backpropagateScore(self,value,simStart):
+    simStart.score = value
+    simStart.numVisits = 1
+    simStart.value = value
+    currNode = simStart
+    while(currNode.parent != None):
+      currNode = currNode.parent
+      currNode.value += value
+      currNode.numVisits += 1
+      currNode.score = currNode.value/currNode.numVisits
+
+
+
+
+  def monteCarloTreeSearch(self,startTime):
+    self.stateDict = dict()
+    currGameState = self.gameState
+    maxSimulations = 200
+    counter = 0
+    root = mcTree(currGameState)
+    self.stateDict[root.id] = root
+
+    while(counter < maxSimulations):
+      nodeForExpansion = self.selectNode(root)
+      simStart = self.expandNode(nodeForExpansion)
+      value = self.simulateGame(simStart)
+      self.backpropagateScore(value,simStart)
+      counter += 1
+      if time.time()-startTime>0.49:
+        break
+
+  def findBestActionWithTree(self,startTime):
+    self.monteCarloTreeSearch(startTime)
+    actions = self.gameState.getLegalActions(self.index)
+    bestValue = -9999
+    bestAction = random.choice(actions)
+    for action in actions:
+      if action == 'Stop' or (action == self.reverseDirection(self.myAction) and len(actions)>2):
+        continue
+      successor = self.getSuccessor(self.gameState, action)
+      value = self.stateDict[successor].score
+      print(value)
+      print("action = ",action)
+      # raw_input()     
+      if value > bestValue:
+        bestValue = value
+        bestAction = action
+    self.myAction = bestAction
+    return bestAction 
+
+
+  def chooseAction(self, gameState):
+      startTime=time.time()
+
+      """    Update variables related to position    """
+      self.successor = self.getSuccessor(gameState, 'Stop')
+      self.myPos = self.successor.getAgentPosition(self.index)
+      self.gameState=gameState
+
+      """    Update my foodArray to check if something was eaten    """
+      if AgentGroup2.blue:
+        AgentGroup2.myFoodBoolArray=gameState.getBlueFood()
+      else:
+        AgentGroup2.myFoodBoolArray = gameState.getBlueFood()
+
+      #Example of a behavior tree
+      """
+      tree = Fallback([
+        #if i died i need to find a new food target
+        Sequence([self.iDied,self.findFoodTarget]).run,
+        #if there is an enemy close i need to run away
+        Sequence([self.enemyClose,self.runAway]).run,
+        # if i have too much food i go home
+        Sequence([self.iAteTooMuch,self.goHome]).run,
+        # if not i grab food
+        Sequence([self.iAte,self.findFoodTarget]).run
+      ])
+      #tree.run()
+      #bestAction = self.findBestAction()
+      #self.debugDraw(self.aim, [1, 0, 0], True)
+      """
+      self.debugDraw(self.aim, [1, 0, 0], True)
+
+      print("index: "+str(self.index)+"  counter: "+str(self.counter)+"  aim"+str(self.aim))+ "   current pos:"+str(self.myPos)
+
+
+
+
+      for eindex in AgentGroup2.enemyIndexes:
+        AgentGroup2.partFilters[eindex].testForNone()
+
+
+      """    Particles filter updates    """
+      for eindex in AgentGroup2.enemyIndexes:
+        AgentGroup2.partFilters[eindex].update(self.myPos,gameState.getAgentDistances()[eindex],self.index)
+
+
+      print "done0"
+
+      """    Check if some food has been eaten and update the particles filter if so    """
+      foodLost=self.myFoodChanged(self.myFoodBoolArray,self.myOldFoodBoolArray)
+      if foodLost!=None:
+        for eindex in AgentGroup2.enemyIndexes:
+          AgentGroup2.partFilters[eindex].knownPos(foodLost,AgentGroup2.partFilters.values())
+
+
+      """    Check if the enemies are in sight    """
+      for eindex in AgentGroup2.enemyIndexes:
+        if(gameState.getAgentPosition(eindex)!=None):
+          AgentGroup2.partFilters[eindex].knownThisPos(gameState.getAgentPosition(eindex))
+
+
+      """    Draw the particles    """
+      for eindex in AgentGroup2.enemyIndexes:
+        AgentGroup2.partFilters[eindex].draw()
+
+      """    Save our old food array (to check if something hes been eaten    """
+      AgentGroup2.myOldFoodBoolArray=AgentGroup2.myFoodBoolArray
+
+
+      #Elapsed time during decision making
+
+      #return bestAction
+      #return 'urk'
+      chosenAction = self.findBestActionWithTree(startTime)
+      print time.time()-startTime
+
+      return chosenAction
 
 class ParticleFilter:
   NUMBER_PARTICLES=100
@@ -618,3 +773,6 @@ class ParticleFilter:
       possibleMoves.append((part[0],part[1]-1))
     possibleMoves.append((part[0],part[1]))
     return possibleMoves
+
+
+
