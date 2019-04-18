@@ -248,8 +248,6 @@ class AgentGroup2(CaptureAgent):
         AgentGroup2.partFilters[eindex].update(self.myPos,gameState.getAgentDistances()[eindex],self.index)
 
 
-      print "done0"
-
       """    Check if some food has been eaten and update the particles filter if so    """
       foodLost=self.myFoodChanged(self.myFoodBoolArray,self.myOldFoodBoolArray)
       if foodLost!=None:
