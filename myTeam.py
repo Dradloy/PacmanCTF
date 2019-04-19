@@ -77,6 +77,8 @@ class AgentGroup2(CaptureAgent):
   nbAgents=2
   myMinX=0
   myMaxX=0
+  behaviour = 0
+  enemyPos=None
 
   def __init__(self, index):
     CaptureAgent.__init__(self,index)
@@ -185,7 +187,7 @@ class AgentGroup2(CaptureAgent):
     dicPos={0:(1,1),1:self.startPos,2:(1,1),3:self.startPos}
     sim = Simulation(gameState,AgentGroup2.XLENGTH,AgentGroup2.YLENGTH,self.blue,dicPos,agentIndex,direction,False,False,0,0,AgentGroup2.myMinX,AgentGroup2.myMaxX,AgentGroup2.dicStartPos)
     #run the simulation
-    sim.run()
+    #sim.run()
     # Need to keep an update of the food carried
     dicFoodCarried={}
     for index in AgentGroup2.myIndexes:
@@ -217,24 +219,11 @@ class AgentGroup2(CaptureAgent):
       else:
         AgentGroup2.myFoodBoolArray = gameState.getBlueFood()
 
-      #Example of a behavior tree
-      """
-      tree = Fallback([
-        #if i died i need to find a new food target
-        Sequence([self.iDied,self.findFoodTarget]).run,
-        #if there is an enemy close i need to run away
-        Sequence([self.enemyClose,self.runAway]).run,
-        # if i have too much food i go home
-        Sequence([self.iAteTooMuch,self.goHome]).run,
-        # if not i grab food
-        Sequence([self.iAte,self.findFoodTarget]).run
-      ])
-      #tree.run()
+
       #bestAction = self.findBestAction()
       #self.debugDraw(self.aim, [1, 0, 0], True)
-      """
-
-      print("index: "+str(self.index)+"  counter: "+str(self.counter)+"  aim"+str(self.aim))+ "   current pos:"+str(self.myPos)
+      #"""
+      # print("index: "+str(self.index)+"  counter: "+str(self.counter)+"  aim"+str(self.aim))+ "   current pos:"+str(self.myPos)
 
 
 
@@ -286,15 +275,40 @@ class AgentGroup2(CaptureAgent):
 
 
 
-
-
-
-
-
+      if(self.index<2 and not (self.danger and self.myPos[0]<self.mid)):
+        print self.index, "ATTACKER"
+        tree = Fallback([
+          #if i died i need to find a new food target
+          Sequence([self.iDied,self.findFoodTarget]).run,   # 0 get into position
+          #if there is an enemy close i need to run away
+          Sequence([self.enemyClose,self.runAway]).run,     # 1    
+          # if i have too much food i go home
+          Sequence([self.iAteTooMuch,self.goHome]).run,     # 2
+          # if not i grab food
+          Sequence([self.iAte,self.findFoodTarget]).run     # 3
+        ])
+        tree.run()
+      else:
+        print self.index, "Defender"
+        tree = Fallback([
+          Sequence([self.iDied,self.randomPatrol]).run,
+          #if killed enemy, start patrolling again
+          Sequence([self.iKilled,self.randomPatrol]).run,
+          #try to eat enemy pacmans
+          Sequence([self.enemyClose,self.chaseEnemy]).run,
+          #if choose another random friendly pill
+          Sequence([self.iChecked,self.randomPatrol]).run
+        ])
+        tree.run()
       #Elapsed time during decision making
       chosenAction = self.findBestActionWithTree(startTime)
-      print time.time()-startTime
 
+      print self.index, self.behaviour, self.aim
+      # if(self.myPos[0]>10):
+      #   raw_input()
+      if(self.index==0):
+        print time.time()-startTime
+        # print self.index, self.behaviour, self.myPos, self.aim, self.getMazeDistance(self.myPos,self.aim)
       return chosenAction
 
 
@@ -377,7 +391,8 @@ class AgentGroup2(CaptureAgent):
     self.counter=0
 
   def iDied(self):
-    print("index: "+str(self.index)+"  iDied")
+    #print("index: "+str(self.index)+"  iDied")
+    self.behavior = 0
     if self.myPos==self.startPos:
       self.counter=0
       return 'done'
@@ -385,25 +400,37 @@ class AgentGroup2(CaptureAgent):
       return 'failed'
 
   def iAte(self):
-    print("index: " + str(self.index) + "  iAte")
+    #print("index: " + str(self.index) + "  iAte")
+    self.behaviour = 0
     if self.myPos==self.aim and not self.danger:
-      self.counter+=1;
+      self.counter+=1
       return 'done'
     else:
       return 'failure'
 
   def iAteTooMuch(self):
-    print("index: " + str(self.index) + "  iAteTooMuch      counter:"+str(self.counter))
+    #print("index: " + str(self.index) + "  iAteTooMuch      counter:"+str(self.counter))
     if self.counter>=self.foodLimit:
+      self.behaviour = 2
       return 'done'
     else:
       return 'failed'
 
+  def iKilled(self):
+    #print("index: "+str(self.index)+"  iDied")
+    if self.myPos == self.enemyPos:
+      self.behavior = 0
+      return 'done'
+    else:
+      return 'failed'
+
+
   def enemyClose(self):
-    print("index: " + str(self.index) + "  enemyClose")
+    # print("index: " + str(self.index) + "  enemyClose")
     min = 9999
     allenemies = [self.successor.getAgentState(i) for i in self.getOpponents(self.successor)]
-    enemies = [a for a in allenemies if not a.isPacman and a.getPosition() != None]
+    enemies = [a for a in allenemies if a.getPosition() != None]
+    print(len(enemies))
     if len(enemies)==0:
       self.danger = False
       return 'failed'
@@ -413,13 +440,17 @@ class AgentGroup2(CaptureAgent):
         dist = self.getMazeDistance(self.myPos, enemy.getPosition())
         if dist < min:
           min=dist
+          self.enemyPos = enemy.getPosition()
+    print "DANGER", min
     if min<self.securityDistance:
       self.danger=True
+      print self.index, self.behaviour, "CHANGED"
       return 'done'
     self.danger = False
     return 'failed'
 
   def runAway(self):
+    self.behaviour = 1
     print("index: " + str(self.index) + "  runAway")
     min = 9999
     allenemies = [self.successor.getAgentState(i) for i in self.getOpponents(self.successor)]
@@ -444,8 +475,45 @@ class AgentGroup2(CaptureAgent):
       return 'done'
     return 'failed'
 
+  def chaseEnemy(self):
+    #print("index: " + str(self.index) + "  runAway")
+    min = 9999
+    allenemies = [self.successor.getAgentState(i) for i in self.getOpponents(self.successor)]
+    enemies = [a for a in allenemies if a.getPosition() != None]
+    closest=None
+    if len(enemies)==0:
+      return 'failed'
+    for enemy in enemies:
+      if (enemy.getPosition() != None):
+        dist = self.getMazeDistance(self.myPos, enemy.getPosition())
+        if dist < min:
+          closest = enemy.getPosition()
+          min = dist
+    if closest!=None:
+      self.aim = closest
+      self.behaviour = 3
+      print "CHASE", self.index, self.behaviour, self.aim
+      return 'done'
+    return 'failed'  
+
+  def randomPatrol(self):
+    print("index: " + str(self.index) + "  randomPatrol")
+    foodLeft = self.getFoodYouAreDefending(self.gameState).asList()
+    # self.behaviour = 0
+    if len(foodLeft)>0:
+      self.aim = random.choice(foodLeft)    
+    else:
+      pass
+
+  def iChecked(self):
+    # print("index: " + str(self.index) + "  iChecked")
+    if self.getMazeDistance(self.myPos,self.aim)<3:
+      return 'done'
+    else:
+      return 'failed'
+
   def findFoodTarget(self):
-    print("index: " + str(self.index) + "  findFoodTarget")
+    #print("index: " + str(self.index) + "  findFoodTarget")
     foodLeft = self.getFood(self.gameState).asList()
     for index in self.indexes:
       if self.index!=index:
@@ -491,7 +559,7 @@ class AgentGroup2(CaptureAgent):
       treeDepth = 1
       currNode = root
 
-      C = np.sqrt(2)
+      C = np.sqrt(20)
 
       while treeDepth < maxTreeDepth:
         treeDepth += 1
@@ -503,13 +571,13 @@ class AgentGroup2(CaptureAgent):
         for child in currNode.children:
           if child.score == None:
             return child
-          else:
-            ucb1Score = child.score + C*np.sqrt(np.log(currNode.numVisits)/child.numVisits)
-            if ucb1Score > maxScore:
-              maxNode = child
-              maxScore = ucb1Score
+        currNode = random.choice(currNode.children)
+            # ucb1Score = child.score + C*np.sqrt(np.log(currNode.numVisits)/child.numVisits)
+            # if ucb1Score > maxScore:
+            #   maxNode = child
+            #   maxScore = ucb1Score
         
-        currNode = maxNode
+        # currNode = maxNode
 
       return currNode
 
@@ -541,14 +609,16 @@ class AgentGroup2(CaptureAgent):
 
   def simulateGame(self,simStart):
     turnCounter = 0
-    turnLimit = 50
+    turnLimit = 5
     currState = simStart.id
     prevAction = Directions.STOP
+    # print currState, prevAction
+    # raw_input()
     while(turnCounter < turnLimit):
       actions = currState.getLegalActions(self.index)
-      actions.remove('Stop')
+      actions.remove(Directions.STOP)
       # print self.reverseDirection(prevAction)
-      if prevAction!=Directions.STOP and len(actions) > 1:
+      if self.behaviour != 1 and prevAction!=Directions.STOP and len(actions) > 1:
         try:
           actions.remove(self.reverseDirection(prevAction))
         except ValueError:
@@ -558,7 +628,7 @@ class AgentGroup2(CaptureAgent):
       turnCounter += 1
       currState = self.getSuccessor(currState, nextAction)
       prevAction = nextAction
-      # print currState
+      # print currState, prevAction
       # raw_input()
       if currState.data._lose == True:
         return -999
@@ -567,66 +637,117 @@ class AgentGroup2(CaptureAgent):
 
     # print currState
     # raw_input()
-    return self.simScore(simStart.id,currState,0) 
+    return self.simScore(currState) 
 
-  def simScore(self,startState,currState,behaviorMode):
-    
-    newScore = currState.getScore()
-    oldScore = startState.getScore()
-    if newScore != oldScore:
-      return (newScore - oldScore)*50
+  def spawnScore(self,currPos,currState):
+    # print currPos, self.aim, self.getMazeDistance(currPos, self.aim)
+
+    return currState.getScore()*30-self.getMazeDistance(currPos, self.aim)*50
+
+  def escapeScore(self,currPos):
+    return self.getMazeDistance(currPos, self.enemyPos)*20 - self.getMazeDistance(self.myPos, self.aim)
+
+  def depositScore(self,currPos,currState):
+     return currState.getScore()*500-self.getMazeDistance(currPos, self.aim)*5
+   
+  def chaseScore(self,currPos,currState):
+    # print currPos, self.aim, self.getMazeDistance(currPos, self.aim)
+    # raw_input()
+    return -self.getMazeDistance(currPos, self.aim)*50
+    #currState.getScore()*500
+  def simScore(self,currState):
+
+      currPos = currState.getAgentPosition(self.index)
+      if self.behaviour == 0:
+        return self.spawnScore(currPos,currState)
+      elif self.behaviour == 1:
+        return self.escapeScore(currPos)
+      elif self.behaviour == 2:
+        return self.depositScore(currPos,currState)
+      else:
+        return self.chaseScore(currPos,currState)
+
+    # newScore = currState.getScore()
+    # oldScore = startState.getScore()
+    # if newScore != oldScore:
+    #   return (newScore - oldScore)*50
      
-    newSoftScore = currState.data.agentStates[self.index].numCarrying*10
-    oldSoftScore = startState.data.agentStates[self.index].numCarrying*10
+    # newSoftScore = currState.data.agentStates[self.index].numCarrying*10
+    # oldSoftScore = startState.data.agentStates[self.index].numCarrying*10
 
-    newSoftScore -= (20-currState.getRedFood().count())*10
-    oldSoftScore -= (20-startState.getRedFood().count())*10
-    if newSoftScore != oldSoftScore:
-      return newSoftScore - oldSoftScore
+    # newSoftScore -= (20-currState.getRedFood().count())*10
+    # oldSoftScore -= (20-startState.getRedFood().count())*10
+    # if newSoftScore != oldSoftScore:
+    #   return newSoftScore - oldSoftScore
 
-    initPos = startState.getAgentPosition(self.index)
-    currPos = currState.getAgentPosition(self.index)
+    # initPos = startState.getAgentPosition(self.index)
+    # currPos = currState.getAgentPosition(self.index)
 
-    aggression = 0
-    if not startState.data.agentStates[self.index].isPacman:
-      aggression = np.abs(self.mid-self.myPos[0])*5
+    # aggression = 0
+    # if not startState.data.agentStates[self.index].isPacman:
+    #   aggression = np.abs(self.mid-self.myPos[0])*5
 
-    return self.getMazeDistance(initPos, currPos) + aggression
+    # return self.getMazeDistance(initPos, currPos) + aggression
 
 
 
   def backpropagateScore(self,value,simStart):
-    simStart.score = value
-    simStart.numVisits = 1
-    simStart.value = value
+    simStart.numVisits += 1
+    simStart.value += value
     currNode = simStart
+    simStart.score = simStart.value/simStart.numVisits
+
+    # print "score: ", currNode.value, currNode.numVisits, currNode.score
+    # print currNode.id.getAgentState(self.index).getPosition()
+    # raw_input()
     while(currNode.parent != None):
       currNode = currNode.parent
       currNode.value += value
       currNode.numVisits += 1
       currNode.score = currNode.value/currNode.numVisits
+      
+      # if(self.index==0):
+      #   print "score: ", currNode.value, currNode.numVisits, currNode.score
+      #   print currNode.id.getAgentState(self.index).getPosition()
+      #   raw_input()
+      
 
-
+  def printTree(self,root,depth):
+    if(depth==0):
+      print "root", root.id.getAgentState(self.index).getPosition(), root.score
+    currNode = root
+    depth += 1
+    for child in currNode.children:
+      for i in range(0,depth):
+        print " ",
+      print "depth ", depth, child.id.getAgentState(self.index).getPosition(), child.score
+      self.printTree(child,depth)
 
 
   def monteCarloTreeSearch(self,startTime):
     self.stateDict = dict()
     currGameState = self.gameState
+
     maxSimulations = 200
     counter = 0
     root = mcTree(currGameState)
     self.stateDict[root.id] = root
-
+    # currNode = root
     while(counter < maxSimulations):
+      # self.printTree(root,0)
+      # raw_input()
       nodeForExpansion = self.selectNode(root)
       simStart = self.expandNode(nodeForExpansion)
       value = self.simulateGame(simStart)
+      # print "VAL", value
       self.backpropagateScore(value,simStart)
       counter += 1
       if time.time()-startTime>0.49:
         break
 
   def findBestActionWithTree(self,startTime):
+    # if(self.index!=0):
+    #   return 'Stop'
     self.monteCarloTreeSearch(startTime)
     actions = self.gameState.getLegalActions(self.index)
     bestValue = -9999
@@ -636,8 +757,11 @@ class AgentGroup2(CaptureAgent):
         continue
       successor = self.getSuccessor(self.gameState, action)
       value = self.stateDict[successor].score
-      print(value)
-      print("action = ",action)
+      # print(value)
+      # if(self.index==0):
+        # print("action = ",action, value, self.stateDict[successor].value, self.stateDict[successor].numVisits)
+        # print self.stateDict[successor].parent.value
+        # raw_input()
       # raw_input()     
       if value > bestValue:
         bestValue = value
