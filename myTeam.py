@@ -60,7 +60,7 @@ class AgentGroup2(CaptureAgent):
   """
   myAction='Stop'
   securityDistance=4
-  foodLimit=3
+  foodLimit=4
   mid=0
   aims = dict({})
   indexes=[]
@@ -83,6 +83,8 @@ class AgentGroup2(CaptureAgent):
   enemyCapsules = None
   capsuleEffect = 0
   capsuleEnemy = 0
+  foodLost = None
+  lastFoodLost = None
 
   def __init__(self, index):
     CaptureAgent.__init__(self,index)
@@ -248,10 +250,10 @@ class AgentGroup2(CaptureAgent):
 
 
       """    Check if some food has been eaten and update the particles filter if so    """
-      foodLost=self.myFoodChanged(self.myFoodBoolArray,self.myOldFoodBoolArray)
-      if foodLost!=None:
+      self.foodLost=self.myFoodChanged(self.myFoodBoolArray,self.myOldFoodBoolArray)
+      if self.foodLost!=None:
         for eindex in AgentGroup2.enemyIndexes:
-          AgentGroup2.partFilters[eindex].knownPos(foodLost,AgentGroup2.partFilters.values())
+          AgentGroup2.partFilters[eindex].knownPos(self.foodLost,AgentGroup2.partFilters.values())
 
 
       """    Check if the enemies are in sight    """
@@ -314,11 +316,14 @@ class AgentGroup2(CaptureAgent):
           # if near enemy but enemy has eaten capsule, keep your distance
           Sequence([self.enemyCapsuleActive,self.enemyClose,self.runAway]).run,
           Sequence([self.iDied,self.randomPatrol]).run,  # 5
-          #if killed enemy, start patrolling again
+          # if killed enemy, start patrolling again
           Sequence([self.iKilled,self.randomPatrol]).run, # 5
-          #try to eat enemy pacmans (even if they are far)
+          # try to eat enemy pacmans (even if they are far)
           Sequence([self.enemyVisible,self.chaseEnemy]).run,
-          #if choose another random friendly pill
+          # if no enemy is visible but some of our food disappeared,
+          # aim for the food closest to the last disappeared food
+          Sequence([self.foodMissing,self.closestToMissing]).run,
+          # if choose another random friendly pill
           Sequence([self.iChecked,self.randomPatrol]).run
         ])
         tree.run()
@@ -328,7 +333,10 @@ class AgentGroup2(CaptureAgent):
       print self.index, self.behaviour, self.aim
       # if(self.myPos[0]>10):
       #   raw_input()
-      if(self.index==0):
+      if(self.index==2):
+        # if(self.behaviour == 3):
+        #   print self.aim
+        #   raw_input()
         print time.time()-startTime
         # print self.index, self.behaviour, self.myPos, self.aim, self.getMazeDistance(self.myPos,self.aim)
       return chosenAction
@@ -443,6 +451,7 @@ class AgentGroup2(CaptureAgent):
     #print("index: "+str(self.index)+"  iDied")
     if self.myPos == self.enemyPos:
       self.behaviour = 0
+      self.lastFoodLost = None
       return 'done'
     else:
       return 'failed'
@@ -546,7 +555,37 @@ class AgentGroup2(CaptureAgent):
       self.danger = 0
     return 'done'
 
+  def foodMissing(self):
+    if self.foodLost != None:
+      self.lastFoodLost = self.foodLost
+      return 'done'
+    elif self.lastFoodLost != None:
+      return 'done'
+    else:
+      return 'failed'
 
+  def closestToMissing(self):
+    
+    if self.myFoodBoolArray==None:
+      self.behavior = 0
+      return
+    self.behavior = 3
+    length = 0
+    for a in self.myFoodBoolArray:
+        length += 1
+    minDist = 999
+    closestFood = None
+    for i in range(0,length):
+      for j in range(0,len(self.myFoodBoolArray[0])):
+          if self.myFoodBoolArray[i][j]==True:
+            dist = self.getMazeDistance((i,j),self.lastFoodLost)
+            if dist < minDist:
+              minDist = dist
+              closestFood = (i,j)
+    if closestFood != None:
+      self.aim = closestFood
+    else:
+      self.behavior = 0
 
   def runAway(self):
     self.behaviour = 1
@@ -569,7 +608,7 @@ class AgentGroup2(CaptureAgent):
       for act in actions:
         successor2 = self.getSuccessor(self.gameState, act)
         pos2 = successor2.getAgentPosition(self.index)
-        if self.getMazeDistance(closest.getPosition(),pos2)>max:
+        if self.getMazeDistance(closest.getPosition(),pos2)>max and pos2!=self.startPos:
           self.aim=pos2
       return 'done'
     return 'failed'
@@ -728,7 +767,7 @@ class AgentGroup2(CaptureAgent):
       actions = currState.getLegalActions(self.index)
       actions.remove(Directions.STOP)
       # print self.reverseDirection(prevAction)
-      if self.behaviour != 1 and prevAction!=Directions.STOP and len(actions) > 1:
+      if self.behaviour == 0 and prevAction!=Directions.STOP and len(actions) > 1:
         try:
           actions.remove(self.reverseDirection(prevAction))
         except ValueError:
@@ -755,7 +794,7 @@ class AgentGroup2(CaptureAgent):
     return -self.getMazeDistance(currPos, self.aim)*50
 
   def escapeScore(self,currPos):
-    return self.getMazeDistance(currPos, self.enemyPos)*20 - self.getMazeDistance(self.myPos, self.aim)
+    return - self.getMazeDistance(currPos, self.aim)
 
   def depositScore(self,currPos,currState):
      return -self.getMazeDistance(currPos, self.aim)*5
@@ -863,7 +902,7 @@ class AgentGroup2(CaptureAgent):
     bestValue = -9999
     bestAction = random.choice(actions)
     for action in actions:
-      if action == 'Stop' or (self.behaviour != 1 and action == self.reverseDirection(self.myAction) and len(actions)>2):
+      if action == 'Stop' or (self.behaviour == 0 and action == self.reverseDirection(self.myAction) and len(actions)>2):
         continue
       successor = self.getSuccessor(self.gameState, action)
       value = self.stateDict[successor].score
