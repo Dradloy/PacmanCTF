@@ -79,6 +79,10 @@ class AgentGroup2(CaptureAgent):
   myMaxX=0
   behaviour = 0
   enemyPos=None
+  capsules = None
+  enemyCapsules = None
+  capsuleEffect = 0
+  capsuleEnemy = 0
 
   def __init__(self, index):
     CaptureAgent.__init__(self,index)
@@ -202,6 +206,12 @@ class AgentGroup2(CaptureAgent):
     foodLeft = self.getFood(gameState).asList()
     self.aim = random.choice(self.closestFoods(foodLeft,9))
 
+    if self.blue:
+      self.capsules = self.gameState.getRedCapsules()
+      self.enemyCapsules = self.gameState.getBlueCapsules()
+    else:
+      self.capsules = self.gameState.getBlueCapsules()
+      self.enemyCapsules = self.gameState.getRedCapsules()
 
 
   def chooseAction(self, gameState):
@@ -277,10 +287,18 @@ class AgentGroup2(CaptureAgent):
 
       if(self.index<2 and not (self.danger and self.myPos[0]<self.mid)):
         print self.index, "ATTACKER"
+        self.AteCapsule()
         tree = Fallback([
-          #if i died i need to find a new food target
+          # if i died i need to find a new food target
           Sequence([self.iDied,self.findFoodTarget]).run,   # 0 get into position
-          #if there is an enemy close i need to run away
+          # if there's an enemy close but we can eat them,
+          # chase them (until capsule close to running out)
+          Sequence([self.capsuleActive,self.enemyClose,self.chaseEnemy]).run, 
+          # if there is an enemy close, capsule close
+          # and i am closer to the capsule than the enemy,
+          # go to capsule
+          Sequence([self.capsuleClose,self.eatCapsule]).run, 
+          # if there is an enemy close i need to run away
           Sequence([self.enemyClose,self.runAway]).run,     # 1    
           # if i have too much food i go home
           Sequence([self.iAteTooMuch,self.goHome]).run,     # 2
@@ -290,12 +308,16 @@ class AgentGroup2(CaptureAgent):
         tree.run()
       else:
         print self.index, "Defender"
+        self.enemyAteCapsule()
         tree = Fallback([
-          Sequence([self.iDied,self.randomPatrol]).run,
+
+          # if near enemy but enemy has eaten capsule, keep your distance
+          Sequence([self.enemyCapsuleActive,self.enemyClose,self.runAway]).run,
+          Sequence([self.iDied,self.randomPatrol]).run,  # 5
           #if killed enemy, start patrolling again
-          Sequence([self.iKilled,self.randomPatrol]).run,
-          #try to eat enemy pacmans
-          Sequence([self.enemyClose,self.chaseEnemy]).run,
+          Sequence([self.iKilled,self.randomPatrol]).run, # 5
+          #try to eat enemy pacmans (even if they are far)
+          Sequence([self.enemyVisible,self.chaseEnemy]).run,
           #if choose another random friendly pill
           Sequence([self.iChecked,self.randomPatrol]).run
         ])
@@ -392,7 +414,8 @@ class AgentGroup2(CaptureAgent):
 
   def iDied(self):
     #print("index: "+str(self.index)+"  iDied")
-    self.behavior = 0
+    self.behaviour = 0
+    self.danger = 0
     if self.myPos==self.startPos:
       self.counter=0
       return 'done'
@@ -419,11 +442,66 @@ class AgentGroup2(CaptureAgent):
   def iKilled(self):
     #print("index: "+str(self.index)+"  iDied")
     if self.myPos == self.enemyPos:
-      self.behavior = 0
+      self.behaviour = 0
       return 'done'
     else:
       return 'failed'
 
+  def capsuleClose(self):
+
+    minDist = 6
+    minCapsule = None
+    for capsule in self.capsules:
+      dist = self.getMazeDistance(self.myPos,capsule)
+      if dist < minDist:
+        minDist = dist
+        minCapsule = capsule
+    
+    if minCapsule != None and self.enemyClose() == 'done':
+      if self.getMazeDistance(self.myPos,minCapsule) < self.getMazeDistance(self.myPos,minCapsule):
+        self.behaviour = 0
+        return 'done'
+    else:
+      return 'failed'
+
+  def AteCapsule(self):
+    flag = False
+    for capsule in self.capsules:
+      if self.myPos == capsule:
+        self.capsuleEffect = 35
+        self.foodLimit = 10
+        flag = True
+        break
+    if flag:
+      self.capsules.remove(capsule)
+
+  def enemyAteCapsule(self):
+    if self.blue:
+      enemyCaps = self.gameState.getBlueCapsules()
+    else:
+      enemyCaps = self.gameState.getRedCapsules()
+    
+    for capsule in self.enemyCapsules:
+      if capsule not in enemyCaps:
+        self.capsuleEnemy = 38
+        self.enemyCapsules.remove(capsule)
+        break
+
+
+  def capsuleActive(self):
+    if self.capsuleEffect > 10:
+      self.capsuleEffect -= 1
+    elif self.capsuleEffect > 0:
+      self.capsuleEffect -= 1
+      self.foodLimit = 3
+      return 'done'
+    return 'failed'
+
+  def enemyCapsuleActive(self):
+    if self.capsuleEnemy > 1:
+      self.capsuleEnemy -= 1
+      return 'done'
+    return 'failed'
 
   def enemyClose(self):
     # print("index: " + str(self.index) + "  enemyClose")
@@ -448,6 +526,27 @@ class AgentGroup2(CaptureAgent):
       return 'done'
     self.danger = False
     return 'failed'
+
+  def enemyVisible(self):
+    # print("index: " + str(self.index) + "  enemyClose")
+    min = 9999
+    allenemies = [self.successor.getAgentState(i) for i in self.getOpponents(self.successor)]
+    enemies = [a for a in allenemies if a.isPacman and a.getPosition() != None]
+    if len(enemies)==0:
+      self.danger = 0
+      return 'failed'
+    for enemy in enemies:
+      if(enemy.getPosition()!=None):
+
+        dist = self.getMazeDistance(self.myPos, enemy.getPosition())
+        if dist < min:
+          min=dist
+          self.enemyPos = enemy.getPosition()
+    if min > self.securityDistance:
+      self.danger = 0
+    return 'done'
+
+
 
   def runAway(self):
     self.behaviour = 1
@@ -496,10 +595,21 @@ class AgentGroup2(CaptureAgent):
       return 'done'
     return 'failed'  
 
+  def eatCapsule(self):
+    minCapsule = None
+    minDist = 999
+    for capsule in self.capsules:
+      dist = self.getMazeDistance(self.myPos,capsule)
+      if dist < minDist:
+        minDist = dist
+        minCapsule = capsule
+    self.aim = minCapsule
+
+
   def randomPatrol(self):
     print("index: " + str(self.index) + "  randomPatrol")
     foodLeft = self.getFoodYouAreDefending(self.gameState).asList()
-    # self.behaviour = 0
+    # self.behaviour = 5
     if len(foodLeft)>0:
       self.aim = random.choice(foodLeft)    
     else:
@@ -641,15 +751,15 @@ class AgentGroup2(CaptureAgent):
 
   def spawnScore(self,currPos,currState):
     # print currPos, self.aim, self.getMazeDistance(currPos, self.aim)
-
-    return currState.getScore()*30-self.getMazeDistance(currPos, self.aim)*50
+    #(currState.getScore()-self.gameState.getScore()*60)
+    return -self.getMazeDistance(currPos, self.aim)*50
 
   def escapeScore(self,currPos):
     return self.getMazeDistance(currPos, self.enemyPos)*20 - self.getMazeDistance(self.myPos, self.aim)
 
   def depositScore(self,currPos,currState):
-     return currState.getScore()*500-self.getMazeDistance(currPos, self.aim)*5
-   
+     return -self.getMazeDistance(currPos, self.aim)*5
+     #(currState.getScore()-self.gameState.getScore()*500)
   def chaseScore(self,currPos,currState):
     # print currPos, self.aim, self.getMazeDistance(currPos, self.aim)
     # raw_input()
@@ -728,7 +838,7 @@ class AgentGroup2(CaptureAgent):
     self.stateDict = dict()
     currGameState = self.gameState
 
-    maxSimulations = 200
+    maxSimulations = 400
     counter = 0
     root = mcTree(currGameState)
     self.stateDict[root.id] = root
@@ -742,7 +852,7 @@ class AgentGroup2(CaptureAgent):
       # print "VAL", value
       self.backpropagateScore(value,simStart)
       counter += 1
-      if time.time()-startTime>0.49:
+      if time.time()-startTime>0.493:
         break
 
   def findBestActionWithTree(self,startTime):
@@ -753,7 +863,7 @@ class AgentGroup2(CaptureAgent):
     bestValue = -9999
     bestAction = random.choice(actions)
     for action in actions:
-      if action == 'Stop' or (action == self.reverseDirection(self.myAction) and len(actions)>2):
+      if action == 'Stop' or (self.behaviour != 1 and action == self.reverseDirection(self.myAction) and len(actions)>2):
         continue
       successor = self.getSuccessor(self.gameState, action)
       value = self.stateDict[successor].score
