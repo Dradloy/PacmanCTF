@@ -560,7 +560,7 @@ class AgentGroup2(CaptureAgent):
       return 'failed'
 
   def myTurf(self):
-    if False and self.myPos[0]<15 and self.enemyPos[0]<16:
+    if False and self.myPos[0]<self.mid and self.enemyPos[0]<self.mid+1:
       print 'turf'
       return 'done'
     return 'failed'
