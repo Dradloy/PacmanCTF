@@ -136,9 +136,13 @@ class AgentGroup2(CaptureAgent):
     AgentGroup2.XLENGTH = i
     AgentGroup2.YLENGTH = len(gameState.getWalls()[0])
 
+    """    Initialize my starting position    """
+    self.startPos = self.myPos
+
     """    Compute the mid x (the one on our side)    """
     AgentGroup2.mid = self.distancer.dc.layout.width / 2
     if (self.startPos[0] < self.mid):
+      print "mid is broken !!!!!!!!!!!!!!!!!!!!!!!!!"
       AgentGroup2.mid -= 1
 
     """    Determine if we are blue or red team    """
@@ -157,8 +161,6 @@ class AgentGroup2(CaptureAgent):
     """    Count number of agents per team     """
     AgentGroup2.nbAgents=len(AgentGroup2.myIndexes)
 
-    """    Initialize my starting position    """
-    self.startPos = self.myPos
 
     """    Innitialise dictionary of positions (needed for simulation)    """
     AgentGroup2.dicPos[self.index]=self.myPos
@@ -227,9 +229,9 @@ class AgentGroup2(CaptureAgent):
 
       """    Update my foodArray to check if something was eaten    """
       if AgentGroup2.blue:
-        AgentGroup2.myFoodBoolArray=gameState.getRedFood()
+        AgentGroup2.myFoodBoolArray=gameState.getBlueFood()
       else:
-        AgentGroup2.myFoodBoolArray = gameState.getBlueFood()
+        AgentGroup2.myFoodBoolArray = gameState.getRedFood()
 
 
       #bestAction = self.findBestAction()
@@ -285,9 +287,9 @@ class AgentGroup2(CaptureAgent):
           for index in AgentGroup2.myIndexes:
               self.debugDraw(AgentGroup2.dicPos[index], [1, 0, 0], False)
 
-
+      print '______________________________________________________________________________'
       if(self.index<2):
-        # print self.index, "ATTACKER"
+        print self.index, "ATTACKER"
         self.AteCapsule()
         tree = Fallback([
           # if i died i need to find a new food target
@@ -311,7 +313,7 @@ class AgentGroup2(CaptureAgent):
         ])
         tree.run()
       else:
-        # print self.index, "Defender"
+        print self.index, "Defender"
         self.enemyAteCapsule()
         tree = Fallback([
 
@@ -332,6 +334,8 @@ class AgentGroup2(CaptureAgent):
       #Elapsed time during decision making
       chosenAction = self.findBestActionWithTree(startTime)
 
+      if type(self.aim)==tuple:
+        self.debugDraw(self.aim, [1, 0, 0], True)
       # print self.index, self.behaviour, self.aim
       # if(self.myPos[0]>10):
       #   raw_input()
@@ -521,6 +525,8 @@ class AgentGroup2(CaptureAgent):
 
   def enemyClose(self):
     # print("index: " + str(self.index) + "  enemyClose")
+    if AgentGroup2.myMinX<self.myPos[0] and self.myPos[0]<AgentGroup2.myMaxX:
+      return 'failed'
     min = 9999
     allenemies = [self.successor.getAgentState(i) for i in self.getOpponents(self.successor)]
     enemies = [a for a in allenemies if a.getPosition() != None]
@@ -575,7 +581,7 @@ class AgentGroup2(CaptureAgent):
       return 'failed'
 
   def closestToMissing(self):
-    
+    print("index: " + str(self.index) + "  closestToMissing")
     if self.myFoodBoolArray==None:
       self.behavior = 0
       return
@@ -613,19 +619,19 @@ class AgentGroup2(CaptureAgent):
           closest = enemy
           min = dist
     if closest!=None:
-    #   max=self.getMazeDistance(self.myPos, closest.getPosition())
-    #   actions = self.gameState.getLegalActions(self.index)
-    #   for act in actions:
-    #     successor2 = self.getSuccessor(self.gameState, act)
-    #     pos2 = successor2.getAgentPosition(self.index)
-    #     if self.getMazeDistance(closest.getPosition(),pos2)>max and pos2!=self.startPos:
-    #       self.aim=pos2
-      self.aim = 'None'
+      max=self.getMazeDistance(self.myPos, closest.getPosition())
+      actions = self.gameState.getLegalActions(self.index)
+      for act in actions:
+        successor2 = self.getSuccessor(self.gameState, act)
+        pos2 = successor2.getAgentPosition(self.index)
+        if self.getMazeDistance(closest.getPosition(),pos2)>max and pos2!=self.startPos:
+          self.aim=pos2
+      #self.aim = 'None'
       return 'done'
     return 'failed'
 
   def chaseEnemy(self):
-    #print("index: " + str(self.index) + "  runAway")
+    print("index: " + str(self.index) + "  chaseEnemy")
     min = 9999
     allenemies = [self.successor.getAgentState(i) for i in self.getOpponents(self.successor)]
     enemies = [a for a in allenemies if a.getPosition() != None]
@@ -646,6 +652,7 @@ class AgentGroup2(CaptureAgent):
     return 'failed'  
 
   def eatCapsule(self):
+    print("index: " + str(self.index) + "  eatCapsule")
     minCapsule = None
     minDist = 999
     for capsule in self.capsules:
@@ -673,7 +680,7 @@ class AgentGroup2(CaptureAgent):
       return 'failed'
 
   def findFoodTarget(self):
-    #print("index: " + str(self.index) + "  findFoodTarget")
+    print("index: " + str(self.index) + "  findFoodTarget")
     foodLeft = self.getFood(self.gameState).asList()
     for index in self.indexes:
       if self.index!=index:
@@ -813,7 +820,13 @@ class AgentGroup2(CaptureAgent):
   def escapeScore(self,currPos):
     if(currPos[0]==1):
       return -999999
-    return self.getMazeDistance(currPos, self.enemyPos)*400 - currPos[0]*50 
+    min=999999
+    for i in range(1,self.distancer.dc.layout.height-1):
+      if not self.distancer.dc.layout.isWall((self.mid,i)):
+        if self.getMazeDistance((self.mid,i),self.myPos)<min:
+          min=self.getMazeDistance((self.mid,i),self.myPos)
+          best=(self.mid,i)
+    return self.getMazeDistance(currPos, self.enemyPos)*400-300*self.getMazeDistance(currPos, best)# - currPos[0]*50
 
   def depositScore(self,currPos,currState):
      return -self.getMazeDistance(currPos, self.aim)*5
