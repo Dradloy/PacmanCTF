@@ -93,7 +93,7 @@ class AgentGroup2(CaptureAgent):
     self.myOldPos=[1,3]
     self.successor= None
     self.gameState= None
-    self.danger=False
+    self.danger = False
     self.aims[index]=self.aim
     self.enemyPos=None
     self.behaviour = 0
@@ -336,10 +336,10 @@ class AgentGroup2(CaptureAgent):
       # if(self.myPos[0]>10):
       #   raw_input()
       # if(self.index==0):
-      #   print self.index, self.behaviour, self.aim
-        # if(self.behaviour == 3):
-        #   print self.aim
-        #   raw_input()
+      #   # print self.index, self.behaviour, self.aim
+      #   if(self.behaviour == 3 or self.behaviour == 1):
+      #     # print self.aim
+      #     raw_input()
         # print time.time()-startTime
         # print self.index, self.behaviour, self.myPos, self.aim, self.getMazeDistance(self.myPos,self.aim)
         # if(self.danger):
@@ -429,7 +429,7 @@ class AgentGroup2(CaptureAgent):
   def iDied(self):
     #print("index: "+str(self.index)+"  iDied")
     self.behaviour = 0
-    self.danger = 0
+    self.danger = False
     if self.myPos==self.startPos:
       self.counter=0
       return 'done'
@@ -483,7 +483,7 @@ class AgentGroup2(CaptureAgent):
     flag = False
     for capsule in self.capsules:
       if self.myPos == capsule:
-        self.capsuleEffect = 35
+        self.capsuleEffect = 33
         self.foodLimit = 10
         flag = True
         break
@@ -506,6 +506,7 @@ class AgentGroup2(CaptureAgent):
   def capsuleActive(self):
     if self.capsuleEffect > 10:
       self.capsuleEffect -= 1
+      return 'done'
     elif self.capsuleEffect > 0:
       self.capsuleEffect -= 1
       self.foodLimit = 3
@@ -529,21 +530,19 @@ class AgentGroup2(CaptureAgent):
       return 'failed'
     for enemy in enemies:
       if(enemy.getPosition()!=None):
-
         dist = self.getMazeDistance(self.myPos, enemy.getPosition())
         if dist < min:
           min=dist
           self.enemyPos = enemy.getPosition()
-    # print "DANGER", min, self.enemyPos
     if min<self.securityDistance:
       self.danger=True
-      # print self.index, self.behaviour, "CHANGED"
       return 'done'
-    self.danger = False
-    return 'failed'
+    else:
+      self.danger = False
+      return 'failed'
 
   def myTurf(self):
-    if self.myPos[0]<17:
+    if self.myPos[0]<15 and self.enemyPos[0]<16:
       return 'done'
     return 'failed'
 
@@ -600,7 +599,7 @@ class AgentGroup2(CaptureAgent):
 
   def runAway(self):
     self.behaviour = 1
-    # print("index: " + str(self.index) + "  runAway")
+    print("index: " + str(self.index) + "  runAway")
     min = 9999
     allenemies = [self.successor.getAgentState(i) for i in self.getOpponents(self.successor)]
     enemies = [a for a in allenemies if not a.isPacman and a.getPosition() != None]
@@ -614,13 +613,14 @@ class AgentGroup2(CaptureAgent):
           closest = enemy
           min = dist
     if closest!=None:
-      max=self.getMazeDistance(self.myPos, closest.getPosition())
-      actions = self.gameState.getLegalActions(self.index)
-      for act in actions:
-        successor2 = self.getSuccessor(self.gameState, act)
-        pos2 = successor2.getAgentPosition(self.index)
-        if self.getMazeDistance(closest.getPosition(),pos2)>max and pos2!=self.startPos:
-          self.aim=pos2
+    #   max=self.getMazeDistance(self.myPos, closest.getPosition())
+    #   actions = self.gameState.getLegalActions(self.index)
+    #   for act in actions:
+    #     successor2 = self.getSuccessor(self.gameState, act)
+    #     pos2 = successor2.getAgentPosition(self.index)
+    #     if self.getMazeDistance(closest.getPosition(),pos2)>max and pos2!=self.startPos:
+    #       self.aim=pos2
+      self.aim = 'None'
       return 'done'
     return 'failed'
 
@@ -715,31 +715,34 @@ class AgentGroup2(CaptureAgent):
 
 
   def selectNode(self,root):
+    if self.aim != 'None':
+      maxTreeDepth = min(6,self.getMazeDistance(self.myPos,self.aim))-1
+    else:
       maxTreeDepth = 5
-      treeDepth = 1
-      currNode = root
+    treeDepth = 1
+    currNode = root
 
-      C = np.sqrt(20)
+    C = np.sqrt(20)
 
-      while treeDepth < maxTreeDepth:
-        treeDepth += 1
-        if not currNode.children:
-          return currNode
+    while treeDepth < maxTreeDepth:
+      treeDepth += 1
+      if not currNode.children:
+        return currNode
 
-        maxScore = -9999
-        maxNode = None
-        for child in currNode.children:
-          if child.score == None:
-            return child
-        currNode = random.choice(currNode.children)
-            # ucb1Score = child.score + C*np.sqrt(np.log(currNode.numVisits)/child.numVisits)
-            # if ucb1Score > maxScore:
-            #   maxNode = child
-            #   maxScore = ucb1Score
-        
-        # currNode = maxNode
+      maxScore = -9999
+      maxNode = None
+      for child in currNode.children:
+        if child.score == None:
+          return child
+      currNode = random.choice(currNode.children)
+          # ucb1Score = child.score + C*np.sqrt(np.log(currNode.numVisits)/child.numVisits)
+          # if ucb1Score > maxScore:
+          #   maxNode = child
+          #   maxScore = ucb1Score
+      
+      # currNode = maxNode
 
-      return currNode
+    return currNode
 
   def expandNode(self,node):
     availableMoves = node.id.getLegalActions(self.index)
@@ -769,7 +772,10 @@ class AgentGroup2(CaptureAgent):
 
   def simulateGame(self,simStart):
     turnCounter = 0
-    turnLimit = min(10,self.getMazeDistance(self.myPos,self.aim))
+    if self.aim != 'None':
+      turnLimit = min(5,self.getMazeDistance(self.myPos,self.aim))
+    else:
+      turnLimit = 5
     currState = simStart.id
     prevAction = Directions.STOP
     # print currState, prevAction
@@ -807,7 +813,7 @@ class AgentGroup2(CaptureAgent):
   def escapeScore(self,currPos):
     if(currPos[0]==1):
       return -999999
-    return self.getMazeDistance(currPos, self.enemyPos)*40 - currPos[0] 
+    return self.getMazeDistance(currPos, self.enemyPos)*400 - currPos[0]*50 
 
   def depositScore(self,currPos,currState):
      return -self.getMazeDistance(currPos, self.aim)*5
@@ -904,7 +910,7 @@ class AgentGroup2(CaptureAgent):
       counter += 1
       # if time.time()-startTime>0.493:
       #   break
-    # if(self.index==0):
+    # if(self.index==0 and self.getMazeDistance(self.myPos,self.aim)==1):
     #   self.printTree(root,0)
     #   raw_input()
   def findBestActionWithTree(self,startTime):
@@ -912,7 +918,7 @@ class AgentGroup2(CaptureAgent):
     #   return 'Stop'
     self.monteCarloTreeSearch(startTime)
     actions = self.gameState.getLegalActions(self.index)
-    bestValue = -9999
+    bestValue = -999999999
     bestAction = random.choice(actions)
     if(self.index==0):
       print "behaviour= ", self.behaviour, "aim = ", self.aim, "danger = ", self.danger
@@ -922,14 +928,16 @@ class AgentGroup2(CaptureAgent):
       successor = self.getSuccessor(self.gameState, action)
       value = self.stateDict[successor].score
       # print(value)
-      # if(self.index==0):
+      # if(self.index==0 and (self.behaviour == 0 or self.behaviour == 0) and self.getMazeDistance(self.myPos,self.aim)==1):
       #   print("action = ",action, value, self.stateDict[successor].value, self.stateDict[successor].numVisits)
-      #   raw_input()
       #raw_input()     
       if value > bestValue:
         bestValue = value
         bestAction = action
     self.myAction = bestAction
+    # if(self.index==0 and (self.behaviour == 0 or self.behaviour == 0) and self.getMazeDistance(self.myPos,self.aim)==1):
+    #   print "best action = ", bestAction
+    #   raw_input()
     return bestAction 
 
 
