@@ -21,7 +21,6 @@ from util import nearestPoint
 from BehaviorTree import *
 from simulation import *
 import copy
-import numpy as np
 from mcst import mcTree
 
 #################     python capture.py -r myTeam -b baselineTeam
@@ -69,8 +68,10 @@ class AgentGroup2(CaptureAgent):
   XLENGTH = 0
   YLENGTH = 0
   blue=True
+  dicRoles={}
   dicPos={}
   dicStartPos={}
+  dicFoodCarried={}
   partFilters=dict({})
   enemyIndexes=[]
   myIndexes=[]
@@ -83,6 +84,7 @@ class AgentGroup2(CaptureAgent):
   capsuleEnemy = 0
   foodLost = None
   lastFoodLost = None
+  oldScore=0
 
   def __init__(self, index):
     CaptureAgent.__init__(self,index)
@@ -96,6 +98,7 @@ class AgentGroup2(CaptureAgent):
     self.danger = False
     self.aims[index]=self.aim
     self.enemyPos=None
+    self.enemyCloseIndex=0
     self.behaviour = 0
 
 
@@ -122,6 +125,12 @@ class AgentGroup2(CaptureAgent):
     '''    Initialize maze distances    '''
     CaptureAgent.registerInitialState(self, gameState)
 
+    '''    Initialize the dictionary of roles    '''
+    if(self.index<=1):
+      AgentGroup2.dicRoles[self.index]='d'
+    else:
+      AgentGroup2.dicRoles[self.index]='a'
+
     '''    Initialize variables needed to know my position    '''
     self.gameState = gameState
     self.successor = self.getSuccessor(gameState, 'Stop')
@@ -147,7 +156,7 @@ class AgentGroup2(CaptureAgent):
 
     """    Determine if we are blue or red team    """
     if(self.index<=1):
-      self.blue = not gameState.isOnRedTeam(self.index)
+      AgentGroup2.blue = not gameState.isOnRedTeam(self.index)
 
     """    Initialize indexes    """
     if(self.index<=1):
@@ -157,6 +166,11 @@ class AgentGroup2(CaptureAgent):
       else:
         AgentGroup2.myIndexes = gameState.getRedTeamIndices()
         AgentGroup2.enemyIndexes = gameState.getBlueTeamIndices()
+    print 'myIndexed',AgentGroup2.myIndexes
+    print 'enemyIndexed',AgentGroup2.enemyIndexes
+    print 'blue',AgentGroup2.blue
+    print 'myIndex',self.index
+
 
     """    Count number of agents per team     """
     AgentGroup2.nbAgents=len(AgentGroup2.myIndexes)
@@ -172,8 +186,15 @@ class AgentGroup2(CaptureAgent):
     AgentGroup2.dicStartPos[self.index] = self.myPos
     if (self.index <= 1):
         for index in AgentGroup2.enemyIndexes:
+            AgentGroup2.dicStartPos[index] = gameState.getInitialAgentPosition(index)
             AgentGroup2.dicPos[index] = gameState.getInitialAgentPosition(index)
 
+    """    Innitialise dictionary of carried food    """
+    if (self.index <= 1):
+      for index in AgentGroup2.myIndexes:
+        AgentGroup2.dicFoodCarried[index] = 0
+      for index in AgentGroup2.enemyIndexes:
+        AgentGroup2.dicFoodCarried[index] = 0
 
     """    Initialize particle filters    """
     if (self.index <= 1):
@@ -188,25 +209,9 @@ class AgentGroup2(CaptureAgent):
       AgentGroup2.myMinX=0
       AgentGroup2.myMaxX=AgentGroup2.mid
 
-    #Example as how to run a simulation
-    agentIndex=self.index
-    #direction diven by the node of the tree
-    direction="South"
-    dicPos={0:(1,1),1:self.startPos,2:(1,1),3:self.startPos}
-    sim = Simulation(gameState,AgentGroup2.XLENGTH,AgentGroup2.YLENGTH,self.blue,dicPos,agentIndex,direction,False,False,0,0,AgentGroup2.myMinX,AgentGroup2.myMaxX,AgentGroup2.dicStartPos)
-    #run the simulation
-    #sim.run()
-    # Need to keep an update of the food carried
-    dicFoodCarried={}
-    for index in AgentGroup2.myIndexes:
-      dicFoodCarried[index]=0
-    for index in AgentGroup2.enemyIndexes:
-      dicFoodCarried[index]=0
-    print 'score: '+str(sim.getScore('attack',dicFoodCarried))
-    print "index:"+str(self.index)+"  pos="+str(self.myPos)
-    print sim.toString()
 
-    #Choose a semi rando goal
+
+    #Choose a semi random goal
     foodLeft = self.getFood(gameState).asList()
     self.aim = random.choice(self.closestFoods(foodLeft,9))
 
@@ -242,8 +247,6 @@ class AgentGroup2(CaptureAgent):
 
 
 
-      for eindex in AgentGroup2.enemyIndexes:
-        AgentGroup2.partFilters[eindex].testForNone()
 
 
       """    Particles filter updates    """
@@ -254,8 +257,38 @@ class AgentGroup2(CaptureAgent):
       """    Check if some food has been eaten and update the particles filter if so    """
       self.foodLost=self.myFoodChanged(self.myFoodBoolArray,self.myOldFoodBoolArray)
       if self.foodLost!=None:
+        possible=[]
         for eindex in AgentGroup2.enemyIndexes:
           AgentGroup2.partFilters[eindex].knownPos(self.foodLost,AgentGroup2.partFilters.values())
+          if AgentGroup2.partFilters[eindex].hasPos(self.foodLost):
+            possible.append(eindex)
+        if len(possible)==0:
+          possible=AgentGroup2.enemyIndexes
+        min=9999
+        bestIndex=-1
+        for eindex in AgentGroup2.enemyIndexes:
+          if self.getMazeDistance(self.foodLost,AgentGroup2.dicPos.get(eindex))<min:
+            min=self.getMazeDistance(self.foodLost,AgentGroup2.dicPos.get(eindex))
+            bestIndex=eindex
+        AgentGroup2.dicFoodCarried[bestIndex]+=1
+
+      """      Check if some food has been return by the enemy      """
+      min=9999
+      best=AgentGroup2.enemyIndexes[0]
+      if AgentGroup2.blue and gameState.getScore()>AgentGroup2.oldScore:
+        for eindex in AgentGroup2.enemyIndexes:
+          if abs(AgentGroup2.dicFoodCarried.get(eindex)-(gameState.getScore() - AgentGroup2.oldScore))+abs(AgentGroup2.dicPos.get(eindex)[0]-AgentGroup2.mid)<min:
+            min=abs(AgentGroup2.dicFoodCarried.get(eindex)-(gameState.getScore() - AgentGroup2.oldScore))+abs(AgentGroup2.dicPos.get(eindex)[0]-AgentGroup2.mid)
+            best=eindex
+        AgentGroup2.dicFoodCarried[best] = 0
+      elif not AgentGroup2.blue and gameState.getScore()<AgentGroup2.oldScore:
+        for eindex in AgentGroup2.enemyIndexes:
+          if abs(AgentGroup2.dicFoodCarried.get(eindex)+(gameState.getScore() - AgentGroup2.oldScore))+abs(AgentGroup2.dicPos.get(eindex)[0]-AgentGroup2.mid)<min:
+            min=abs(AgentGroup2.dicFoodCarried.get(eindex)+(gameState.getScore() - AgentGroup2.oldScore))+abs(AgentGroup2.dicPos.get(eindex)[0]-AgentGroup2.mid)
+            best=eindex
+        AgentGroup2.dicFoodCarried[best] = 0
+      AgentGroup2.oldScore=gameState.getScore()
+
 
 
       """    Check if the enemies are in sight    """
@@ -264,8 +297,12 @@ class AgentGroup2(CaptureAgent):
           AgentGroup2.partFilters[eindex].knownThisPos(gameState.getAgentPosition(eindex))
 
 
+
+      if type(self.aim)==tuple:
+        self.debugDraw(self.aim, [1, 0, 0], True)
+
       """    Draw the particles    """
-      if False:
+      if True:
           for eindex in AgentGroup2.enemyIndexes:
             AgentGroup2.partFilters[eindex].draw()
 
@@ -279,6 +316,13 @@ class AgentGroup2(CaptureAgent):
       for eindex in AgentGroup2.enemyIndexes:
           AgentGroup2.dicPos[eindex]=AgentGroup2.partFilters.get(eindex).findBest()
 
+
+      '''      Check if an enemy died      '''
+      for eindex in AgentGroup2.enemyIndexes:
+        if abs(AgentGroup2.dicStartPos.get(eindex)[0]-AgentGroup2.dicPos.get(eindex)[0])<6:
+          AgentGroup2.dicFoodCarried[eindex]=0
+
+
       """      Draw dicPos      """
       if False:
           self.debugDraw(self.myPos, [1, 0, 0], True)
@@ -287,8 +331,20 @@ class AgentGroup2(CaptureAgent):
           for index in AgentGroup2.myIndexes:
               self.debugDraw(AgentGroup2.dicPos[index], [1, 0, 0], False)
 
+      '''      Update the roles      '''
+
+      if(self.twoShouldDefend()):#if one of their agent has carries a lot or if we are too behind
+        self.makeTwoDefend()
+
+      elif(self.twoShouldAttack()):#
+        self.makeTwoAttack()
+      else:
+        self.makeOneDefend()
+
+
+
       print '______________________________________________________________________________'
-      if(self.index<2):
+      if AgentGroup2.dicRoles.get(self.index)=='a':
         print self.index, "ATTACKER"
         self.AteCapsule()
         tree = Fallback([
@@ -334,8 +390,6 @@ class AgentGroup2(CaptureAgent):
       #Elapsed time during decision making
       chosenAction = self.findBestActionWithTree(startTime)
 
-      if type(self.aim)==tuple:
-        self.debugDraw(self.aim, [1, 0, 0], True)
       # print self.index, self.behaviour, self.aim
       # if(self.myPos[0]>10):
       #   raw_input()
@@ -357,6 +411,126 @@ class AgentGroup2(CaptureAgent):
   '''
   Functions that return data
   '''
+  def twoShouldDefend(self):
+    sum=0
+    for eindex in AgentGroup2.enemyIndexes:
+      sum+=AgentGroup2.dicFoodCarried.get(eindex)
+    if sum>=6:
+      return True
+    print AgentGroup2.dicFoodCarried
+    return False
+
+  def makeTwoDefend(self):
+    max1 = 0
+    idmax1=-1
+    idmax2=-1
+    max2 = 0
+    for eindex in AgentGroup2.enemyIndexes:
+      if AgentGroup2.dicFoodCarried.get(eindex)>max1:
+        idmax2=idmax1
+        max2=max1
+        idmax1=eindex
+        max1=AgentGroup2.dicFoodCarried.get(eindex)
+      elif AgentGroup2.dicFoodCarried.get(eindex)>max2:
+        idmax2=eindex
+        max2=AgentGroup2.dicFoodCarried.get(eindex)
+    min1=9999
+    min2=9999
+    idmin1=0
+    idmin2=0
+    if idmax2>0:
+      for index in AgentGroup2.myIndexes:
+        dist=self.getMazeDistance(self.myPos,AgentGroup2.dicPos.get(idmax1))+self.getMazeDistance(self.myPos,AgentGroup2.dicPos.get(idmax2))
+        if dist<min1:
+          min2=min1
+          idmin2=idmin1
+          min1=dist
+          idmin1=index
+        elif dist<min2:
+          min2=dist
+          idmin2=index
+    else:
+      for index in AgentGroup2.myIndexes:
+        dist=self.getMazeDistance(self.myPos,AgentGroup2.dicPos.get(idmax1))
+        if dist<min1:
+          min2=min1
+          idmin2=idmin1
+          min1=dist
+          idmin1=index
+        elif dist<min2:
+          min2=dist
+          idmin2=index
+      for index in AgentGroup2.myIndexes:
+        if index==idmin1 or index==idmin2:
+          AgentGroup2.dicRoles[index]='d'
+        else:
+          AgentGroup2.dicRoles[index]='a'
+
+  def twoShouldAttack(self):
+    shouldDefend=False
+    for eindex in AgentGroup2.enemyIndexes:
+      if abs(AgentGroup2.dicPos.get(eindex)[0]-AgentGroup2.dicStartPos.get(eindex)[0])>5:
+        shouldDefend=True
+    if not shouldDefend:
+      return True
+    return False
+
+
+  def makeTwoAttack(self):
+    min1=9999
+    min2=9999
+    idmin1=0
+    idmin2=0
+    for index in AgentGroup2.myIndexes:
+      min=999
+      best = None
+      for i in range(1, self.distancer.dc.layout.height - 1):
+        if not self.distancer.dc.layout.isWall((self.mid, i)):
+          if self.getMazeDistance((self.mid, i), self.myPos) < min:
+            min = self.getMazeDistance((self.mid, i), self.myPos)
+            best = (self.mid, i)
+      dist=self.getMazeDistance(self.myPos,best)
+      if dist<min1:
+        min2=min1
+        idmin2=idmin1
+        min1=dist
+        idmin1=index
+      elif dist<min2:
+        min2=dist
+        idmin2=index
+    for index in AgentGroup2.myIndexes:
+      if index==idmin1 or index==idmin2:
+        AgentGroup2.dicRoles[index]='a'
+      else:
+        AgentGroup2.dicRoles[index]='d'
+
+  def makeOneDefend(self):
+    idmax=-1
+    max=0
+    for eindex in AgentGroup2.enemyIndexes:
+      if AgentGroup2.dicFoodCarried.get(eindex)>max:
+        idmax=eindex
+    if idmax>=0:
+      min=999
+      for index in AgentGroup2.myIndexes:
+        dist=self.getMazeDistance(AgentGroup2.dicPos[index],AgentGroup2.dicPos.get(idmax))
+        if dist<min:
+          best=index
+          min=dist
+    else:
+      min=999
+      for index in AgentGroup2.myIndexes:
+        if AgentGroup2.dicPos[index][0] < min:
+          best = index
+          min = AgentGroup2.dicPos[index][0]
+    for index in AgentGroup2.myIndexes:
+      if index==best:
+        AgentGroup2.dicRoles[index]='d'
+      else:
+        AgentGroup2.dicRoles[index]='a'
+
+
+
 
   def getSuccessor(self, gameState, action):
     """
@@ -436,6 +610,7 @@ class AgentGroup2(CaptureAgent):
     self.danger = False
     if self.myPos==self.startPos:
       self.counter=0
+      self.gameState.getAgentPosition(self.index)
       return 'done'
       print "I died"
     else:
@@ -537,19 +712,13 @@ class AgentGroup2(CaptureAgent):
       print 'enemy close failed'
       return 'failed'
     min = 9999
-    allenemies = [self.successor.getAgentState(i) for i in self.getOpponents(self.successor)]
-    enemies = [a for a in allenemies if a.getPosition() != None]
-    # print(len(enemies))
-    if len(enemies)==0:
-      self.danger = False
-      print 'no enemy close'
-      return 'failed'
-    for enemy in enemies:
-      if(enemy.getPosition()!=None):
-        dist = self.getMazeDistance(self.myPos, enemy.getPosition())
+    for eindex in AgentGroup2.enemyIndexes:
+      if (self.gameState.getAgentPosition(eindex) != None):
+        dist = self.getMazeDistance(self.myPos, self.gameState.getAgentPosition(eindex))
         if dist < min:
-          min=dist
-          self.enemyPos = enemy.getPosition()
+          min = dist
+          self.enemyPos = self.gameState.getAgentPosition(eindex)
+          self.enemyCloseIndex = eindex
     if min<self.securityDistance:
       self.danger=True
       print 'enemy close done'
@@ -753,7 +922,7 @@ class AgentGroup2(CaptureAgent):
     treeDepth = 1
     currNode = root
 
-    C = np.sqrt(20)
+    #C = np.sqrt(20)
 
     while treeDepth < maxTreeDepth:
       treeDepth += 1
@@ -1124,6 +1293,14 @@ class ParticleFilter:
           best=part
           max=count
     return best
+
+  def getNumberOfCells(self):
+    count=0
+    for i in range(0, self.XLENGTH):
+      for j in range(0, self.YLENGTH):
+        if (i,j) in self.particles:
+          count+=1
+    return count
 
 
 
