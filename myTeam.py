@@ -263,11 +263,12 @@ class AgentGroup2(CaptureAgent):
         if(gameState.getAgentPosition(eindex)!=None):
           AgentGroup2.partFilters[eindex].knownThisPos(gameState.getAgentPosition(eindex))
 
-
+      if type(self.aim)==tuple:
+        self.debugDraw(self.aim, [1, 0, 0], True)
       """    Draw the particles    """
-      if False:
-          for eindex in AgentGroup2.enemyIndexes:
-            AgentGroup2.partFilters[eindex].draw()
+      if True:
+        for eindex in AgentGroup2.enemyIndexes:
+          AgentGroup2.partFilters[eindex].draw()
 
       """    Save our old food array (to check if something hes been eaten    """
       AgentGroup2.myOldFoodBoolArray=AgentGroup2.myFoodBoolArray
@@ -335,7 +336,7 @@ class AgentGroup2(CaptureAgent):
       chosenAction = self.findBestActionWithTree(startTime)
 
       if type(self.aim)==tuple:
-        self.debugDraw(self.aim, [1, 0, 0], True)
+        self.debugDraw(self.aim, [1, 0, 0], False)
       # print self.index, self.behaviour, self.aim
       # if(self.myPos[0]>10):
       #   raw_input()
@@ -560,9 +561,15 @@ class AgentGroup2(CaptureAgent):
       return 'failed'
 
   def myTurf(self):
-    if False and self.myPos[0]<self.mid and self.enemyPos[0]<self.mid+1:
-      print 'turf'
-      return 'done'
+    
+    if self.blue:
+      if True and self.myPos[0]>self.mid and self.enemyPos[0]>self.mid-1:
+        print 'turf'
+        return 'done'
+    else:
+      if True and self.myPos[0]<self.mid and self.enemyPos[0]<self.mid+1:
+        print 'turf'
+        return 'done'     
     return 'failed'
 
   def enemyVisible(self):
