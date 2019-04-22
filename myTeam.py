@@ -63,8 +63,7 @@ class AgentGroup2(CaptureAgent):
   mid=0
   aims = dict({})
   indexes=[]
-  myFoodBoolArray=None
-  myOldFoodBoolArray=None
+
   XLENGTH = 0
   YLENGTH = 0
   blue=True
@@ -82,9 +81,9 @@ class AgentGroup2(CaptureAgent):
   enemyCapsules = None
   capsuleEffect = 0
   capsuleEnemy = 0
-  foodLost = None
   lastFoodLost = None
   oldScore=0
+  killCounter = 0
 
   def __init__(self, index):
     CaptureAgent.__init__(self,index)
@@ -100,7 +99,9 @@ class AgentGroup2(CaptureAgent):
     self.enemyPos=None
     self.enemyCloseIndex=0
     self.behaviour = 0
-
+    self.myFoodBoolArray=None
+    self.myOldFoodBoolArray=None
+    self.foodLost = None
 
 
 
@@ -234,9 +235,9 @@ class AgentGroup2(CaptureAgent):
 
       """    Update my foodArray to check if something was eaten    """
       if AgentGroup2.blue:
-        AgentGroup2.myFoodBoolArray=gameState.getBlueFood()
+        self.myFoodBoolArray=gameState.getBlueFood()
       else:
-        AgentGroup2.myFoodBoolArray = gameState.getRedFood()
+        self.myFoodBoolArray = gameState.getRedFood()
 
 
       #bestAction = self.findBestAction()
@@ -307,7 +308,7 @@ class AgentGroup2(CaptureAgent):
             AgentGroup2.partFilters[eindex].draw()
 
       """    Save our old food array (to check if something hes been eaten    """
-      AgentGroup2.myOldFoodBoolArray=AgentGroup2.myFoodBoolArray
+      self.myOldFoodBoolArray=self.myFoodBoolArray
 
 
 
@@ -347,6 +348,7 @@ class AgentGroup2(CaptureAgent):
       if AgentGroup2.dicRoles.get(self.index)=='a':
         print self.index, "ATTACKER"
         self.AteCapsule()
+        self.iKilledWithCapsule()
         tree = Fallback([
           # if i died i need to find a new food target
           Sequence([self.iDied,self.findFoodTarget]).run,   # 0 get into position
@@ -645,9 +647,15 @@ class AgentGroup2(CaptureAgent):
     if self.myPos == self.enemyPos:
       self.behaviour = 0
       self.lastFoodLost = None
+      if self.capsuleEffect > 0:
+        self.killCounter += 1
       return 'done'
     else:
       return 'failed'
+
+  def iKilledWithCapsule(self):
+    if self.myPos == self.enemyPos and self.capsuleEffect > 0:
+      self.killCounter += 1
 
   def capsuleClose(self):
 
@@ -691,6 +699,11 @@ class AgentGroup2(CaptureAgent):
 
 
   def capsuleActive(self):
+    if self.killCounter == self.nbAgents:
+      self.capsuleEffect = 0
+      self.killCounter = 0
+      return 'failed'
+
     if self.capsuleEffect > 10:
       self.capsuleEffect -= 1
       return 'done'
@@ -698,6 +711,8 @@ class AgentGroup2(CaptureAgent):
       self.capsuleEffect -= 1
       self.foodLimit = 3
       return 'done'
+
+    self.killCounter = 0
     return 'failed'
 
   def enemyCapsuleActive(self):
@@ -729,9 +744,14 @@ class AgentGroup2(CaptureAgent):
       return 'failed'
 
   def myTurf(self):
-    if False and self.myPos[0]<self.mid and self.enemyPos[0]<self.mid+1:
-      print 'turf'
-      return 'done'
+    if self.blue:
+      if self.myPos[0]>self.mid and self.enemyPos[0]>self.mid-1:
+        print 'turf'
+        return 'done'
+    else:
+      if self.myPos[0]<self.mid and self.enemyPos[0]<self.mid+1:
+        print 'turf'
+        return 'done' 
     return 'failed'
 
   def enemyVisible(self):
@@ -818,7 +838,7 @@ class AgentGroup2(CaptureAgent):
         pos2 = successor2.getAgentPosition(self.index)
         if pos2!=self.startPos and (2*self.getMazeDistance(best,pos2)-self.getMazeDistance(closest.getPosition(),pos2))<min:
           self.aim=pos2
-          min=pos2!=self.startPos and (2*self.getMazeDistance(best,pos2)-self.getMazeDistance(closest.getPosition(),pos2))
+          min = (2*self.getMazeDistance(best,pos2)-self.getMazeDistance(closest.getPosition(),pos2))
       #self.aim = 'None'
       return 'done'
     return 'failed'
@@ -859,11 +879,17 @@ class AgentGroup2(CaptureAgent):
   def randomPatrol(self):
     print("index: " + str(self.index) + "  randomPatrol")
     foodLeft = self.getFoodYouAreDefending(self.gameState).asList()
-    # self.behaviour = 5
-    if len(foodLeft)>0:
-      self.aim = random.choice(foodLeft)    
+    if not self.blue:
+      max_x = max([i[0] for i in foodLeft])
     else:
       pass
+      min_x = min([i[0] for i in foodLeft])
+    while len(foodLeft)>0:
+      self.aim = random.choice(foodLeft)
+      if not self.blue and (self.aim[0] > self.mid/3 or max_x <= self.mid/3):
+        break
+      elif self.blue and (self.aim[0] < self.mid*5/3 or min_x >= self.mid*5/3):
+        break
 
   def iChecked(self):
     # print("index: " + str(self.index) + "  iChecked")
@@ -1013,13 +1039,7 @@ class AgentGroup2(CaptureAgent):
   def escapeScore(self,currPos):
     if(currPos[0]==1):
       return -999999
-    min=999999
-    for i in range(1,self.distancer.dc.layout.height-1):
-      if not self.distancer.dc.layout.isWall((self.mid,i)):
-        if self.getMazeDistance((self.mid,i),self.myPos)<min:
-          min=self.getMazeDistance((self.mid,i),self.myPos)
-          best=(self.mid,i)
-    return self.getMazeDistance(currPos, self.enemyPos)*400-300*self.getMazeDistance(currPos, best)# - currPos[0]*50
+    return -self.getMazeDistance(currPos, self.aim)*50
 
   def depositScore(self,currPos,currState):
      return -self.getMazeDistance(currPos, self.aim)*5
