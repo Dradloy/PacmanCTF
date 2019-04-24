@@ -84,6 +84,7 @@ class AgentGroup2(CaptureAgent):
   lastFoodLost = None
   oldScore=0
   killCounter = 0
+  spawnLane = 0
 
   def __init__(self, index):
     CaptureAgent.__init__(self,index)
@@ -102,6 +103,7 @@ class AgentGroup2(CaptureAgent):
     self.myFoodBoolArray=None
     self.myOldFoodBoolArray=None
     self.foodLost = None
+
 
 
 
@@ -219,9 +221,11 @@ class AgentGroup2(CaptureAgent):
     if self.blue:
       self.capsules = self.gameState.getRedCapsules()
       self.enemyCapsules = self.gameState.getBlueCapsules()
+      AgentGroup2.spawnLane = AgentGroup2.XLENGTH - 1
     else:
       self.capsules = self.gameState.getBlueCapsules()
       self.enemyCapsules = self.gameState.getRedCapsules()
+      AgentGroup2.spawnLane = 1
 
 
   def chooseAction(self, gameState):
@@ -299,13 +303,13 @@ class AgentGroup2(CaptureAgent):
 
 
 
-      if type(self.aim)==tuple:
-        self.debugDraw(self.aim, [1, 0, 0], True)
+      # if type(self.aim)==tuple:
+      #   self.debugDraw(self.aim, [1, 0, 0], True)
 
-      """    Draw the particles    """
-      if True:
-          for eindex in AgentGroup2.enemyIndexes:
-            AgentGroup2.partFilters[eindex].draw()
+      # """    Draw the particles    """
+      # if True:
+      #     for eindex in AgentGroup2.enemyIndexes:
+      #       AgentGroup2.partFilters[eindex].draw()
 
       """    Save our old food array (to check if something hes been eaten    """
       self.myOldFoodBoolArray=self.myFoodBoolArray
@@ -344,9 +348,9 @@ class AgentGroup2(CaptureAgent):
 
 
 
-      print '______________________________________________________________________________'
+      # print '______________________________________________________________________________'
       if AgentGroup2.dicRoles.get(self.index)=='a':
-        print self.index, "ATTACKER"
+        # print self.index, "ATTACKER"
         self.AteCapsule()
         self.iKilledWithCapsule()
         tree = Fallback([
@@ -371,7 +375,7 @@ class AgentGroup2(CaptureAgent):
         ])
         tree.run()
       else:
-        print self.index, "Defender"
+        # print self.index, "Defender"
         self.enemyAteCapsule()
         tree = Fallback([
 
@@ -395,12 +399,12 @@ class AgentGroup2(CaptureAgent):
       # print self.index, self.behaviour, self.aim
       # if(self.myPos[0]>10):
       #   raw_input()
-      # if(self.index==0):
+      if(self.index<2):
       #   # print self.index, self.behaviour, self.aim
       #   if(self.behaviour == 3 or self.behaviour == 1):
       #     # print self.aim
       #     raw_input()
-        # print time.time()-startTime
+        print time.time()-startTime
         # print self.index, self.behaviour, self.myPos, self.aim, self.getMazeDistance(self.myPos,self.aim)
         # if(self.danger):
         #   print "aim", self.aim
@@ -419,7 +423,7 @@ class AgentGroup2(CaptureAgent):
       sum+=AgentGroup2.dicFoodCarried.get(eindex)
     if sum>=6:
       return True
-    print AgentGroup2.dicFoodCarried
+    # print AgentGroup2.dicFoodCarried
     return False
 
   def makeTwoDefend(self):
@@ -603,7 +607,7 @@ class AgentGroup2(CaptureAgent):
   '''
 
   def resetCounter(self):
-    print("index: " + str(self.index) + "  resetCounter")
+    # print("index: " + str(self.index) + "  resetCounter")
     self.counter=0
 
   def iDied(self):
@@ -614,9 +618,9 @@ class AgentGroup2(CaptureAgent):
       self.counter=0
       self.gameState.getAgentPosition(self.index)
       return 'done'
-      print "I died"
+      # print "I died"
     else:
-      print "I did not die"
+      # print "I did not die"
       return 'failed'
 
   def iAte(self):
@@ -668,8 +672,8 @@ class AgentGroup2(CaptureAgent):
         minCapsule = capsule
     
     if minCapsule != None and self.enemyClose() == 'done':
-      if self.getMazeDistance(self.myPos,minCapsule) < self.getMazeDistance(self.myPos,minCapsule):
-        self.behaviour = 0
+      if self.getMazeDistance(self.myPos,minCapsule) < self.getMazeDistance(self.enemyPos,minCapsule):
+        self.behaviour = 3
         return 'done'
     else:
       return 'failed'
@@ -724,7 +728,7 @@ class AgentGroup2(CaptureAgent):
   def enemyClose(self):
     # print("index: " + str(self.index) + "  enemyClose")
     if AgentGroup2.myMinX<self.myPos[0] and self.myPos[0]<AgentGroup2.myMaxX:
-      print 'enemy close failed'
+      # print 'enemy close failed'
       return 'failed'
     min = 9999
     for eindex in AgentGroup2.enemyIndexes:
@@ -736,21 +740,21 @@ class AgentGroup2(CaptureAgent):
           self.enemyCloseIndex = eindex
     if min<self.securityDistance:
       self.danger=True
-      print 'enemy close done'
+      # print 'enemy close done'
       return 'done'
     else:
       self.danger = False
-      print 'enemy close failed'
+      # print 'enemy close failed'
       return 'failed'
 
   def myTurf(self):
     if self.blue:
       if self.myPos[0]>self.mid and self.enemyPos[0]>self.mid-1:
-        print 'turf'
+        # print 'turf'
         return 'done'
     else:
       if self.myPos[0]<self.mid and self.enemyPos[0]<self.mid+1:
-        print 'turf'
+        # print 'turf'
         return 'done' 
     return 'failed'
 
@@ -783,7 +787,7 @@ class AgentGroup2(CaptureAgent):
       return 'failed'
 
   def closestToMissing(self):
-    print("index: " + str(self.index) + "  closestToMissing")
+    # print("index: " + str(self.index) + "  closestToMissing")
     if self.myFoodBoolArray==None:
       self.behavior = 0
       return
@@ -807,7 +811,7 @@ class AgentGroup2(CaptureAgent):
 
   def runAway(self):
     self.behaviour = 1
-    print("index: " + str(self.index) + "  runAway")
+    # print("index: " + str(self.index) + "  runAway")
     min = 9999
     allenemies = [self.successor.getAgentState(i) for i in self.getOpponents(self.successor)]
     enemies = [a for a in allenemies if not a.isPacman and a.getPosition() != None]
@@ -821,8 +825,8 @@ class AgentGroup2(CaptureAgent):
           closest = enemy
           min = dist
     if closest!=None:
-      print '__________________________________________________________'
-      print '__________________________________________________________'
+      # print '__________________________________________________________'
+      # print '__________________________________________________________'
       min=9999
       best = (self.mid, self.myPos[1])
       for i in range(1, AgentGroup2.YLENGTH - 1):
@@ -844,7 +848,7 @@ class AgentGroup2(CaptureAgent):
     return 'failed'
 
   def chaseEnemy(self):
-    print("index: " + str(self.index) + "  chaseEnemy")
+    # print("index: " + str(self.index) + "  chaseEnemy")
     min = 9999
     allenemies = [self.successor.getAgentState(i) for i in self.getOpponents(self.successor)]
     enemies = [a for a in allenemies if a.getPosition() != None]
@@ -860,12 +864,12 @@ class AgentGroup2(CaptureAgent):
     if closest!=None:
       self.aim = closest
       self.behaviour = 3
-      print "CHASE", self.index, self.behaviour, self.aim
+      # print "CHASE", self.index, self.behaviour, self.aim
       return 'done'
     return 'failed'  
 
   def eatCapsule(self):
-    print("index: " + str(self.index) + "  eatCapsule")
+    # print("index: " + str(self.index) + "  eatCapsule")
     minCapsule = None
     minDist = 999
     for capsule in self.capsules:
@@ -877,7 +881,7 @@ class AgentGroup2(CaptureAgent):
 
 
   def randomPatrol(self):
-    print("index: " + str(self.index) + "  randomPatrol")
+    # print("index: " + str(self.index) + "  randomPatrol")
     foodLeft = self.getFoodYouAreDefending(self.gameState).asList()
     if not self.blue:
       max_x = max([i[0] for i in foodLeft])
@@ -899,7 +903,7 @@ class AgentGroup2(CaptureAgent):
       return 'failed'
 
   def findFoodTarget(self):
-    print("index: " + str(self.index) + "  findFoodTarget")
+    # print("index: " + str(self.index) + "  findFoodTarget")
     foodLeft = self.getFood(self.gameState).asList()
     for index in self.indexes:
       if self.index!=index:
@@ -909,7 +913,7 @@ class AgentGroup2(CaptureAgent):
     self.aim = self.closestFood(foodLeft)
 
   def findBestAction(self):
-    print("index: " + str(self.index) + "  findBestAction")
+    # print("index: " + str(self.index) + "  findBestAction")
     actions = self.gameState.getLegalActions(self.index)
     bestDist = 9999
     for action in actions:
@@ -922,7 +926,7 @@ class AgentGroup2(CaptureAgent):
     return bestAction
 
   def goHome(self):
-    print("index: " + str(self.index) + "  goHome")
+    # print("index: " + str(self.index) + "  goHome")
     min=9999
     best=None
     for i in range(1,self.distancer.dc.layout.height-1):
@@ -995,6 +999,39 @@ class AgentGroup2(CaptureAgent):
           return Directions.EAST
       return action
 
+  def simulateOpponent(self,currState,currentPos,enemyPos):
+
+    minDist = self.getMazeDistance(currentPos,enemyPos)
+    minPos = enemyPos
+    myPos = currState.getAgentPosition(self.index)
+
+    if not currState.hasWall(enemyPos[0]+1,enemyPos[1]):
+      eastPos = (enemyPos[0]+1, enemyPos[1])
+      if(self.getMazeDistance(myPos,eastPos)<minDist):
+        minDist = self.getMazeDistance(myPos,eastPos)
+        minPos = eastPos
+
+    if not currState.hasWall(enemyPos[0]-1,enemyPos[1]):
+      westPos = (enemyPos[0]-1, enemyPos[1])
+      if(self.getMazeDistance(myPos,westPos)<=minDist):
+        minDist = self.getMazeDistance(myPos,westPos)
+        minPos = westPos
+
+    if not currState.hasWall(enemyPos[0],enemyPos[1]+1):
+      northPos = (enemyPos[0], enemyPos[1]+1)
+      if(self.getMazeDistance(myPos,northPos)<=minDist):
+        minDist = self.getMazeDistance(myPos,northPos)
+        minPos = northPos
+
+    if not currState.hasWall(enemyPos[0],enemyPos[1]-1):
+      southPos = (enemyPos[0], enemyPos[1]-1)
+      if(self.getMazeDistance(myPos,southPos)<=minDist):
+        minDist = self.getMazeDistance(myPos,southPos)
+        minPos = southPos
+    
+    # print myPos, enemyPos, minPos
+    # raw_input()
+    return minPos
 
   def simulateGame(self,simStart):
     turnCounter = 0
@@ -1004,6 +1041,7 @@ class AgentGroup2(CaptureAgent):
       turnLimit = 5
     currState = simStart.id
     prevAction = Directions.STOP
+    enemyPosition = self.enemyPos
     # print currState, prevAction
     # raw_input()
     while(turnCounter < turnLimit):
@@ -1020,26 +1058,30 @@ class AgentGroup2(CaptureAgent):
       turnCounter += 1
       currState = self.getSuccessor(currState, nextAction)
       prevAction = nextAction
-      # print currState, prevAction
-      # raw_input()
-      if currState.data._lose == True:
-        return -999
-      elif currState.data._win == True:
-        return 999
+      if(self.behaviour == 1):
+        currentPos = currState.getAgentPosition(self.index)
+        if(currentPos[0]==self.spawnLane):
+          return -999999
+        enemyPosition = self.simulateOpponent(currState,currentPos,enemyPosition)
+        if(enemyPosition==currentPos):
+          return -999999
 
     # print currState
     # raw_input()
-    return self.simScore(currState) 
+    return self.simScore(currState,enemyPosition) 
 
   def spawnScore(self,currPos,currState):
     # print currPos, self.aim, self.getMazeDistance(currPos, self.aim)
     #(currState.getScore()-self.gameState.getScore()*60)
     return -self.getMazeDistance(currPos, self.aim)*50
 
-  def escapeScore(self,currPos):
-    if(currPos[0]==1):
+  def escapeScore(self,currPos,enemyPosition):
+    if(currPos[0]==self.spawnLane or currPos==enemyPosition):
       return -999999
-    return -self.getMazeDistance(currPos, self.aim)*50
+    if(enemyPosition!=None):
+      return -self.getMazeDistance(currPos, self.aim)*50 + self.getMazeDistance(currPos, enemyPosition)*40
+    else:
+      return -self.getMazeDistance(currPos, self.aim)*50
 
   def depositScore(self,currPos,currState):
      return -self.getMazeDistance(currPos, self.aim)*5
@@ -1049,13 +1091,13 @@ class AgentGroup2(CaptureAgent):
     # raw_input()
     return -self.getMazeDistance(currPos, self.aim)*50
     #currState.getScore()*500
-  def simScore(self,currState):
+  def simScore(self,currState,enemyPosition):
 
       currPos = currState.getAgentPosition(self.index)
       if self.behaviour == 0:
         return self.spawnScore(currPos,currState)
       elif self.behaviour == 1:
-        return self.escapeScore(currPos)
+        return self.escapeScore(currPos,enemyPosition)
       elif self.behaviour == 2:
         return self.depositScore(currPos,currState)
       else:
@@ -1146,8 +1188,8 @@ class AgentGroup2(CaptureAgent):
     actions = self.gameState.getLegalActions(self.index)
     bestValue = -999999999
     bestAction = random.choice(actions)
-    if(self.index==0):
-      print "behaviour= ", self.behaviour, "aim = ", self.aim, "danger = ", self.danger
+    # if(self.index==0):
+    #   print "behaviour= ", self.behaviour, "aim = ", self.aim, "danger = ", self.danger
     for action in actions:
       if action == 'Stop' or (self.behaviour == 0 and action == self.reverseDirection(self.myAction) and len(actions)>2):
         continue
