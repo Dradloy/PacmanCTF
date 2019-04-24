@@ -221,7 +221,7 @@ class AgentGroup2(CaptureAgent):
     if self.blue:
       self.capsules = self.gameState.getRedCapsules()
       self.enemyCapsules = self.gameState.getBlueCapsules()
-      AgentGroup2.spawnLane = AgentGroup2.XLENGTH - 1
+      AgentGroup2.spawnLane = AgentGroup2.XLENGTH - 2
     else:
       self.capsules = self.gameState.getBlueCapsules()
       self.enemyCapsules = self.gameState.getRedCapsules()
@@ -245,7 +245,7 @@ class AgentGroup2(CaptureAgent):
 
 
       #bestAction = self.findBestAction()
-      #self.debugDraw(self.aim, [1, 0, 0], True)
+      self.debugDraw(self.aim, [1, 0, 0], True)
       #"""
       # print("index: "+str(self.index)+"  counter: "+str(self.counter)+"  aim"+str(self.aim))+ "   current pos:"+str(self.myPos)
 
@@ -369,7 +369,7 @@ class AgentGroup2(CaptureAgent):
           # go to capsule
           Sequence([self.capsuleClose,self.eatCapsule]).run, 
           # if there is an enemy close i need to run away
-          Sequence([self.enemyClose,self.runAway]).run,     # 1    
+          Sequence([self.enemyClose,self.runAway]).run,     # 1
           # if i have too much food i go home
           Sequence([self.iAteTooMuch,self.goHome]).run,     # 2
           # if not i grab food
@@ -477,6 +477,8 @@ class AgentGroup2(CaptureAgent):
           AgentGroup2.dicRoles[index]='a'
 
   def twoShouldAttack(self):
+    if AgentGroup2.enemyCapsules>16:
+      return True
     shouldDefend=False
     for eindex in AgentGroup2.enemyIndexes:
       if abs(AgentGroup2.dicPos.get(eindex)[0]-AgentGroup2.dicStartPos.get(eindex)[0])>5:
@@ -533,7 +535,7 @@ class AgentGroup2(CaptureAgent):
     else:
       min=999
       for index in AgentGroup2.myIndexes:
-        if AgentGroup2.dicPos[index][0] < AgentGroup2.dicStartPos.get(index)[0]:
+        if abs(AgentGroup2.dicPos[index][0] - AgentGroup2.dicStartPos.get(index)[0])<min:
           best = index
           min = AgentGroup2.dicPos[index][0]
     for index in AgentGroup2.myIndexes:
@@ -841,6 +843,48 @@ class AgentGroup2(CaptureAgent):
           if self.getMazeDistance((self.mid, i), self.myPos) < min:
             min = self.getMazeDistance((self.mid, i), self.myPos)
             best = (self.mid, i)
+      min=9999
+      max=self.getMazeDistance(self.myPos, closest.getPosition())
+      actions = self.gameState.getLegalActions(self.index)
+      for act in actions:
+        successor2 = self.getSuccessor(self.gameState, act)
+        pos2 = successor2.getAgentPosition(self.index)
+        if pos2!=self.startPos and (2*self.getMazeDistance(best,pos2)-self.getMazeDistance(closest.getPosition(),pos2))<min:
+          self.aim=pos2
+          min = (2*self.getMazeDistance(best,pos2)-self.getMazeDistance(closest.getPosition(),pos2))
+      #self.aim = 'None'
+      return 'done'
+    return 'failed'
+
+
+  def runAway2(self):
+
+    min = 9999
+    allenemies = [self.successor.getAgentState(i) for i in self.getOpponents(self.successor)]
+    enemies = [a for a in allenemies if not a.isPacman and a.getPosition() != None]
+    closest=None
+    if len(enemies)==0:
+      return 'failed'
+    for enemy in enemies:
+      if (enemy.getPosition() != None):
+        dist = self.getMazeDistance(self.myPos, enemy.getPosition())
+        if dist < min:
+          closest = enemy
+          min = dist
+    if closest!=None:
+      # print '__________________________________________________________'
+      # print '__________________________________________________________'
+      min=9999
+      if AgentGroup2.blue:
+        midmod=self.mid+1
+      else:
+        midmod=self.mid-1
+      best = (midmod, self.myPos[1])
+      for i in range(1, AgentGroup2.YLENGTH - 1):
+        if not self.gameState.hasWall(midmod, i):
+          if self.getMazeDistance((midmod, i), self.myPos) < min:
+            min = self.getMazeDistance((midmod, i), self.myPos)
+            best = (midmod, i)
       min=9999
       max=self.getMazeDistance(self.myPos, closest.getPosition())
       actions = self.gameState.getLegalActions(self.index)
@@ -1171,7 +1215,7 @@ class AgentGroup2(CaptureAgent):
     self.stateDict = dict()
     currGameState = self.gameState
 
-    maxSimulations = 300
+    maxSimulations = 500
     counter = 0
     root = mcTree(currGameState)
     self.stateDict[root.id] = root
