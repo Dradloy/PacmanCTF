@@ -95,7 +95,7 @@ class AgentGroup2(CaptureAgent):
     self.successor= None
     self.gameState= None
     self.danger = False
-    self.aims[index]=self.aim
+    AgentGroup2.aims[index]=self.aim
     self.enemyPos=None
     self.enemyCloseIndex=0
     self.behaviour = 0
@@ -332,6 +332,8 @@ class AgentGroup2(CaptureAgent):
           for index in AgentGroup2.myIndexes:
               self.debugDraw(AgentGroup2.dicPos[index], [1, 0, 0], False)
 
+
+
       '''      Update the roles      '''
 
       if(self.twoShouldDefend()):#if one of their agent has carries a lot or if we are too behind
@@ -392,6 +394,8 @@ class AgentGroup2(CaptureAgent):
       #Elapsed time during decision making
       chosenAction = self.findBestActionWithTree(startTime)
 
+      AgentGroup2.aims[self.index]=self.aim
+
       # print self.index, self.behaviour, self.aim
       # if(self.myPos[0]>10):
       #   raw_input()
@@ -417,7 +421,7 @@ class AgentGroup2(CaptureAgent):
     sum=0
     for eindex in AgentGroup2.enemyIndexes:
       sum+=AgentGroup2.dicFoodCarried.get(eindex)
-    if sum>=6:
+    if sum>=6 and self.capsuleEnemy==0:
       return True
     print AgentGroup2.dicFoodCarried
     return False
@@ -516,13 +520,16 @@ class AgentGroup2(CaptureAgent):
       min=999
       for index in AgentGroup2.myIndexes:
         dist=self.getMazeDistance(AgentGroup2.dicPos[index],AgentGroup2.dicPos.get(idmax))
-        if dist<min:
+        if AgentGroup2.dicRoles.get(index)=='a' and dist+3<min:
+          min=dist
+          best=index
+        elif AgentGroup2.dicRoles.get(index)=='d' and dist<min:
           best=index
           min=dist
     else:
       min=999
       for index in AgentGroup2.myIndexes:
-        if AgentGroup2.dicPos[index][0] < min:
+        if AgentGroup2.dicPos[index][0] < AgentGroup2.dicStartPos.get(index)[0]:
           best = index
           min = AgentGroup2.dicPos[index][0]
     for index in AgentGroup2.myIndexes:
@@ -901,11 +908,11 @@ class AgentGroup2(CaptureAgent):
   def findFoodTarget(self):
     print("index: " + str(self.index) + "  findFoodTarget")
     foodLeft = self.getFood(self.gameState).asList()
-    for index in self.indexes:
+    for index in AgentGroup2.myIndexes:
       if self.index!=index:
-        if len(foodLeft)>0 and self.closestFood(foodLeft) == self.aims.get(index):
-          foodLeft.remove(self.aims.get(index))
-
+        if len(foodLeft)>0 and self.closestFood(foodLeft) == AgentGroup2.aims.get(index):
+          foodLeft.remove(AgentGroup2.aims.get(index))
+          print 'one food removed'
     self.aim = self.closestFood(foodLeft)
 
   def findBestAction(self):
